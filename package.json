@@ -1,0 +1,20 @@
+{
+  "name": "wb-processor-telebot",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch run ./index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@prisma/client": "5.9.1",
+    "@supabase/supabase-js": "^2.39.6",
+    "prisma": "^5.9.1",
+    "telegraf": "^4.15.3"
+  }
+}
