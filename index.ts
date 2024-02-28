@@ -5,9 +5,12 @@ import { shopCreationScene } from "./scenes/shopCreationScene";
 import type { Update } from "telegraf/types";
 import type { Shop, User } from "@prisma/client";
 import { setupActions } from "./actions/actions_handler";
+import { ApiClient } from "./api/apiClient";
+
 const SESSION_TIMEOUT = 60 * 60 * 6; // 1 hour in seconds
 const TOKEN_BOT = Bun.env.BOT_TOKEN;
 
+export const apiClient = ApiClient.getInstance();
 export interface MyContext<U extends Update = Update> extends Context<U> {
   session: {
     [key: string]: {

@@ -20,7 +20,7 @@ export function select_shop_Action(bot: Telegraf<MyContext<Update>>) {
               callback_data: `delete_shop_${existingShop?.id}`,
             },
             {
-              text: "real_api",
+              text: "Обработать заказы",
               callback_data: `wb_process_action_real_shop_${existingShop?.id}`,
             },
           ],

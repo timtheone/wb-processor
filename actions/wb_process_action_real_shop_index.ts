@@ -1,5 +1,5 @@
 import type { Telegraf } from "telegraf";
-import type { MyContext } from "..";
+import { apiClient, type MyContext } from "..";
 import type { Update } from "telegraf/types";
 import { getAllShopsFromUserFromContext } from "../entities/Shop/shop";
 
@@ -13,13 +13,7 @@ export function wb_process_action_real_shop_index_Action(
     const shops = await getAllShopsFromUserFromContext(ctx);
     const existingShop = shops.find((shop) => shop.id === shopId);
 
-    const response = (await fetch("http://localhost:3000/process-real", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ token: existingShop?.token }),
-    }).then((res) => res.json())) as { file: string };
+    const response = await apiClient.processOrders(existingShop?.token!);
 
     const imgBuffer = Buffer.from(response.file, "base64");
 

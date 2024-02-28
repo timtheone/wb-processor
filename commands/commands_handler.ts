@@ -6,7 +6,6 @@ import { shopCommand } from "./shop";
 import { startCommand } from "./start";
 import { process_shop_cmd } from "./select_shop_index_cmd";
 import { process_all_shops } from "./process_all_shops";
-import { get_previous_shop_qr } from "./getPreviousQRcode";
 
 export const attachCommands = (
   bot: Telegraf<MyContext<Update>>,
@@ -24,6 +23,5 @@ export const setupCommands = (Bot: Telegraf<MyContext<Update>>) => {
     do_processCommand,
     process_shop_cmd,
     process_all_shops,
-    get_previous_shop_qr,
   ]);
 };
