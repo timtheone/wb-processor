@@ -9,6 +9,7 @@ export class ApiClient {
   public static getInstance(): ApiClient {
     if (!ApiClient.instance) {
       const apiUrl = Bun.env.WB_PROCESSOR_API_URL;
+      console.log("apiUrl", apiUrl);
       if (!apiUrl) {
         throw new Error("WB_PROCESSOR_API_URL is not defined");
       }
@@ -32,6 +33,7 @@ export class ApiClient {
       clearTimeout(id);
       return response;
     } catch (error) {
+      console.error("Error fetching resource:", error);
       throw new Error("Network request failed");
     }
   }
