@@ -1,42 +1,27 @@
-# use the official Bun image
-# see all versions at https://hub.docker.com/r/oven/bun/tags
-# FROM oven/bun:latest as base
+# Use the official Bun image as a base
 FROM oven/bun:1-debian as base
 COPY --from=node:18 /usr/local/bin/node /usr/local/bin/node
+
+# Set working directory in the Docker image
 WORKDIR /usr/src/app
 
-# install dependencies into temp directory
-# this will cache them and speed up future builds
-FROM base AS install
-RUN mkdir -p /temp/dev
-COPY package.json bun.lockb /temp/dev/
-RUN cd /temp/dev && bun install --frozen-lockfile
-
-# install with --production (exclude devDependencies)
-RUN mkdir -p /temp/prod
-COPY package.json bun.lockb /temp/prod/
-RUN cd /temp/prod && bun install --frozen-lockfile --production
-
-# copy node_modules from temp directory
-# then copy all (non-ignored) project files into the image
-FROM base AS prerelease
-COPY --from=install /temp/dev/node_modules node_modules
+# Copy the entire monorepo
 COPY . .
 
-# # [optional] tests & build
-# ENV NODE_ENV=production
-# RUN bun test
-# RUN bun run build
+# Install dependencies at the monorepo root to respect workspaces
+RUN bun install --frozen-lockfile
+
+# Argument to specify service path
+ARG PACKAGE_DIR
+
+# You might want to run specific build commands for your backend or client here
+# For example, if you need to generate Prisma client or run other build scripts:
 
 
-# copy production dependencies and source code into final image
+# Final image setup
 FROM base AS release
-COPY --from=install /temp/prod/node_modules node_modules
-COPY --from=prerelease /usr/src/app/index.ts .
-COPY --from=prerelease /usr/src/app/package.json .
-COPY --from=prerelease /usr/src/app .
-RUN bunx prisma generate
-# run the app
-USER bun
-EXPOSE 3001/tcp
-ENTRYPOINT [ "bun", "start"]
+WORKDIR /usr/src/app/$PACKAGE_DIR
+RUN if [ "$PACKAGE_DIR" = "packages/bot-client" ] ; then bunx prisma generate ; fi
+
+# The entrypoint might need to be adjusted based on the specific service
+ENTRYPOINT [ "bun", "start" ]
