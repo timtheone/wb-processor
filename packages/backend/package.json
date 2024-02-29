@@ -1,4 +1,5 @@
 {
+  "name": "backend",
   "scripts": {
     "dev": "bun run --hot src/index.ts"
   },
