@@ -1,0 +1,21 @@
+# Use the official Bun image as a base
+FROM oven/bun:latest as base
+# Set working directory in the Docker image
+WORKDIR /usr/src/app
+
+# Copy the entire monorepo
+COPY . .
+
+# Install dependencies at the monorepo root to respect workspaces
+RUN bun install --frozen-lockfile
+
+# You might want to run specific build commands for your backend or client here
+# For example, if you need to generate Prisma client or run other build scripts:
+
+
+# Final image setup
+FROM base AS release
+WORKDIR /usr/src/app/packages/backend
+
+# The entrypoint might need to be adjusted based on the specific service
+ENTRYPOINT [ "bun", "start" ]
