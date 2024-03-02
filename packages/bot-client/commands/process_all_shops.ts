@@ -23,6 +23,8 @@ export async function process_all_shops(bot: Telegraf<MyContext<Update>>) {
     // Wait for all fetch promises to settle
     const results = await Promise.allSettled(fetchPromises);
 
+    console.log("results", results);
+
     // Process results
     // Process results in the original order
     for (let i = 0; i < shops.length; i++) {

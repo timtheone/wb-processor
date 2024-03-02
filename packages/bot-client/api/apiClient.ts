@@ -1,3 +1,5 @@
+import { getLastSupply, getMock } from "./functions";
+
 export class ApiClient {
   private static instance: ApiClient;
   private apiUrl: string;
@@ -39,23 +41,24 @@ export class ApiClient {
 
   async processOrders(token: string): Promise<any> {
     try {
-      const response = await this.fetchWithTimeout(
-        `${this.apiUrl}/process-orders`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ token }),
-          timeout: 10000, // 10 Seconds timeout
-        }
-      );
+      // const response = await this.fetchWithTimeout(
+      //   `${this.apiUrl}/process-orders`,
+      //   {
+      //     method: "POST",
+      //     headers: {
+      //       "Content-Type": "application/json",
+      //     },
+      //     body: JSON.stringify({ token }),
+      //     timeout: 10000, // 10 Seconds timeout
+      //   }
+      // );
+      return await getMock(token);
 
-      if (!response.ok) {
-        throw new Error("Failed to process orders");
-      }
+      // if (!response.ok) {
+      //   throw new Error("Failed to process orders");
+      // }
 
-      return await response.json();
+      // return await response.json();
     } catch (error) {
       console.error("Error processing orders:", error);
       throw error;
@@ -64,23 +67,23 @@ export class ApiClient {
 
   async getPreviousCode(token: string): Promise<any> {
     try {
-      const response = await this.fetchWithTimeout(
-        `${this.apiUrl}/get_previous_code`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ token }),
-          timeout: 10000, // 10 Seconds timeout
-        }
-      );
+      // const response = await this.fetchWithTimeout(
+      //   `${this.apiUrl}/get_previous_code`,
+      //   {
+      //     method: "POST",
+      //     headers: {
+      //       "Content-Type": "application/json",
+      //     },
+      //     body: JSON.stringify({ token }),
+      //     timeout: 10000, // 10 Seconds timeout
+      //   }
+      // );
+      return await getLastSupply(token);
+      // if (!response.ok) {
+      //   throw new Error("Failed to get previous code");
+      // }
 
-      if (!response.ok) {
-        throw new Error("Failed to get previous code");
-      }
-
-      return await response.json();
+      // return await response.json();
     } catch (error) {
       console.error("Error getting previous code:", error);
       throw error;
