@@ -1,4 +1,4 @@
-import { getLastSupply, getMock } from "./functions";
+import { getLastSupply, getMock, processOrders } from "./functions";
 
 export class ApiClient {
   private static instance: ApiClient;
@@ -52,7 +52,7 @@ export class ApiClient {
       //     timeout: 10000, // 10 Seconds timeout
       //   }
       // );
-      return await getMock(token);
+      return await processOrders(token);
 
       // if (!response.ok) {
       //   throw new Error("Failed to process orders");
