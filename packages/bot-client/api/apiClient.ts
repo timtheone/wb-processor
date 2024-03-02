@@ -9,7 +9,6 @@ export class ApiClient {
   public static getInstance(): ApiClient {
     if (!ApiClient.instance) {
       const apiUrl = Bun.env.WB_PROCESSOR_API_URL;
-      console.log("apiUrl", apiUrl);
       if (!apiUrl) {
         throw new Error("WB_PROCESSOR_API_URL is not defined");
       }
@@ -40,14 +39,17 @@ export class ApiClient {
 
   async processOrders(token: string): Promise<any> {
     try {
-      const response = await this.fetchWithTimeout(`${this.apiUrl}/getMock`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ token }),
-        timeout: 10000, // 10 Seconds timeout
-      });
+      const response = await this.fetchWithTimeout(
+        `${this.apiUrl}/process-orders`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ token }),
+          timeout: 10000, // 10 Seconds timeout
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to process orders");

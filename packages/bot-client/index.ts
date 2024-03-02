@@ -10,9 +10,6 @@ import { ApiClient } from "./api/apiClient";
 const SESSION_TIMEOUT = 60 * 60 * 6; // 1 hour in seconds
 const TOKEN_BOT = Bun.env.BOT_TOKEN;
 
-console.log("BIG TEST", TOKEN_BOT);
-console.log("Databaseurl", Bun.env.DATABASE_URL);
-
 export const apiClient = ApiClient.getInstance();
 export interface MyContext<U extends Update = Update> extends Context<U> {
   session: {
