@@ -5,6 +5,7 @@ import { shopCommand } from "./shop";
 import { startCommand } from "./start";
 import { process_shop_cmd } from "./select_shop_index_cmd";
 import { process_all_shops } from "./process_all_shops";
+import { quick_action } from "./quick_action";
 
 export const attachCommands = (
   bot: Telegraf<MyContext<Update>>,
@@ -21,5 +22,6 @@ export const setupCommands = (Bot: Telegraf<MyContext<Update>>) => {
     shopCommand,
     process_shop_cmd,
     process_all_shops,
+    quick_action,
   ]);
 };

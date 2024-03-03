@@ -5,9 +5,13 @@ import { getAllShopsFromUserFromContext } from "../entities/Shop/shop";
 
 export async function process_all_shops(bot: Telegraf<MyContext<Update>>) {
   bot.command("process_all_shops", async (ctx) => {
+    const shops = await getAllShopsFromUserFromContext(ctx);
+    if (shops.length === 0) {
+      await ctx.reply(`У вас нет магазинов`);
+      await ctx.answerCbQuery();
+    }
     await ctx.reply(`Работаем...`);
     await ctx.telegram.sendChatAction(ctx.chat?.id, "typing");
-    const shops = await getAllShopsFromUserFromContext(ctx);
 
     const fetchPromises = shops.map((shop) => {
       return apiClient

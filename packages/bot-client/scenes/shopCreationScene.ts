@@ -63,52 +63,6 @@ export const shopCreationScene = (bot: Telegraf<MyContext<Update>>) => {
       if (shopCreated) {
         const freshShops = await getAllShopsFromUserFromContext(ctx);
         session.shops = [...freshShops, shopCreated];
-        const existingChatSpecificCommands = await bot.telegram.getMyCommands({
-          scope: {
-            type: "chat",
-            chat_id: ctx.chat.id,
-          },
-        });
-
-        const doesProccessAllShopsCommandExists =
-          existingChatSpecificCommands.find((command) => {
-            if (command.command === `process_all_shops`) {
-              return true;
-            }
-            return false;
-          });
-
-        const newShopCommand = {
-          command: `process_shop_${shopCreated.name}`,
-          description: `Обработать заказы для магазина ${shopCreated.name}`,
-        };
-
-        doesProccessAllShopsCommandExists
-          ? bot.telegram.setMyCommands(
-              [...existingChatSpecificCommands, newShopCommand],
-              {
-                scope: {
-                  type: "chat",
-                  chat_id: ctx.chat.id,
-                },
-              }
-            )
-          : bot.telegram.setMyCommands(
-              [
-                ...existingChatSpecificCommands,
-                {
-                  command: `process_all_shops`,
-                  description: `Обработать заказы для всех магазинов`,
-                },
-                newShopCommand,
-              ],
-              {
-                scope: {
-                  type: "chat",
-                  chat_id: ctx.chat.id,
-                },
-              }
-            );
 
         await ctx.reply(
           `Магазин <b>"${shopCreated.name}"</b> добавлен успешно!`,

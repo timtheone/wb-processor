@@ -5,7 +5,6 @@ import { select_shop_Action } from "./select_shop_action";
 import { list_shop_Action } from "./list_shop";
 import { add_shop_index_Action } from "./add_shop_index";
 import { wb_process_action_real_shop_index_Action } from "./wb_process_action_real_shop_index";
-import { wb_process_action_shop_Action } from "./wb_process_action_shop";
 import { previous_qr_code } from "./previous_qr_code";
 import { delete_shop_action } from "./delete_shop_action";
 
@@ -23,7 +22,6 @@ export const setupActions = (Bot: Telegraf<MyContext<Update>>) => {
     select_shop_Action,
     list_shop_Action,
     add_shop_index_Action,
-    wb_process_action_shop_Action,
     wb_process_action_real_shop_index_Action,
     previous_qr_code,
     delete_shop_action,
