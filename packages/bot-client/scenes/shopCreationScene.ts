@@ -96,11 +96,11 @@ export const shopCreationScene = (bot: Telegraf<MyContext<Update>>) => {
           : bot.telegram.setMyCommands(
               [
                 ...existingChatSpecificCommands,
-                newShopCommand,
                 {
                   command: `process_all_shops`,
                   description: `Обработать заказы для всех магазинов`,
                 },
+                newShopCommand,
               ],
               {
                 scope: {

@@ -87,6 +87,28 @@ Bot.use((ctx, next) => {
 const stage = new Scenes.Stage([shopCreationScene(Bot)]);
 Bot.use(stage.middleware());
 
+// const existingChatSpecificCommands = await Bot.telegram.getMyCommands({
+//   scope: {
+//     type: "chat",
+//     chat_id: 438143658,
+//   },
+// });
+
+// console.log("existingChatSpecificCommands", existingChatSpecificCommands);
+
+// const test = existingChatSpecificCommands.filter(
+//   (command) => command.command == "shop"
+// );
+
+// console.log("test", test);
+
+// await Bot.telegram.setMyCommands(test, {
+//   scope: {
+//     type: "chat",
+//     chat_id: 438143658,
+//   },
+// });
+
 setupCommands(Bot);
 setupActions(Bot);
 
