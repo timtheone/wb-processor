@@ -75,7 +75,7 @@ export const getLastSupply = async (token: string) => {
   return barCode;
 };
 
-export const processOrders = async (token: string) => {
+export const processOrdersReal = async (token: string) => {
   /* 
     Создаем поставку
   */

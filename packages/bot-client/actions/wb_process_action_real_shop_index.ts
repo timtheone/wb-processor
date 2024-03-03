@@ -15,6 +15,8 @@ export function wb_process_action_real_shop_index_Action(
 
     const response = await apiClient.processOrders(existingShop?.token!);
 
+    console.log("response", response);
+
     const imgBuffer = Buffer.from(response.file, "base64");
 
     await ctx.reply(`Ваш QR код для магазина ${existingShop.name}:`);
