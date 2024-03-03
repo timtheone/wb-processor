@@ -90,6 +90,7 @@ export const processOrdersReal = async (token: string) => {
     }),
   }).then((data) => data.json());
 
+  console.log("newSupply", newSupply);
   /*
     Получаем новые заказы
   */
@@ -100,6 +101,8 @@ export const processOrdersReal = async (token: string) => {
       Authorization: `${token}`,
     },
   }).then((data) => data.json());
+
+  console.log("orders", orders);
   const ordersIds = orders.orders.map((order: any) => order.id);
 
   /*
