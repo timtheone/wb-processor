@@ -68,6 +68,7 @@ export class ApiClient {
 
   async getPreviousCode(token: string): Promise<any> {
     try {
+      console.log("getPreviousCode triggered");
       // const response = await this.fetchWithTimeout(
       //   `${this.apiUrl}/get_previous_code`,
       //   {

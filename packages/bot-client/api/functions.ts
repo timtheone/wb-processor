@@ -47,8 +47,9 @@ export const getLastSupply = async (token: string) => {
         },
       }
     );
-    const jsonData = await response.json();
 
+    const jsonData = await response.json();
+    console.log("jsonData", jsonData);
     if (jsonData.supplies.length === limit) {
       // Return the result of the recursive call
       return await getLastSupply(jsonData.next);
@@ -62,6 +63,8 @@ export const getLastSupply = async (token: string) => {
   };
 
   const lastSupply = await getLastSupply();
+
+  console.log("lastSupply", lastSupply);
 
   const barCode = await fetch(
     `${WB_AP_URL}/api/v3/supplies/${lastSupply.id}/barcode?type=png`,
