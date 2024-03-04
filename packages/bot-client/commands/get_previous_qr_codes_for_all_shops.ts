@@ -36,7 +36,9 @@ export async function getQrCodesForAllShops(bot: Telegraf<MyContext<Update>>) {
       };
       if (result.status === "fulfilled" && result.value && result.value.file) {
         // Success: Send the shop name and the photo
-        await ctx.reply(`Ваш QR код для магазина ${result.value.shopName}:`);
+        await ctx.reply(
+          `Ваш предыдущий QR код для магазина ${result.value.shopName}:`
+        );
         const imgBuffer = Buffer.from(result.value.file, "base64");
         await ctx.replyWithPhoto({ source: imgBuffer });
       } else if (result.status === "rejected" || !result?.value?.file) {
