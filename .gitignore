@@ -3,6 +3,8 @@
 
 .cache
 
+packages/backend/db/dbs
+
 # Diagnostic reports (https://nodejs.org/api/report.html)
 
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
