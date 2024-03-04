@@ -1,4 +1,4 @@
-import { getLastSupply, getMock, processOrdersReal } from "./functions";
+import { getLastSupplyQrCode, getMock, processOrdersReal } from "./functions";
 
 export class ApiClient {
   private static instance: ApiClient;
@@ -80,7 +80,7 @@ export class ApiClient {
       //     timeout: 10000, // 10 Seconds timeout
       //   }
       // );
-      return await getLastSupply(token);
+      return await getLastSupplyQrCode(token);
       // if (!response.ok) {
       //   throw new Error("Failed to get previous code");
       // }
