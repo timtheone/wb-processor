@@ -3,8 +3,10 @@ import { simulateDelay } from "./utils/delay";
 import { cors } from "hono/cors";
 import { extractFromBody } from "../utils/extractTokenFromBody";
 import { productCards } from "../db/schema";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { createOrOpenDatabase } from "../db/createDb";
+import puppeteer from "puppeteer";
+import { ViewTest } from "./pdfCreator/View";
 
 const WB_AP_URL = "https://suppliers-api.wildberries.ru/";
 
@@ -35,8 +37,6 @@ const getLastSupply = async (
       },
     }
   );
-
-  console.log("token", token);
 
   const jsonData = await response.json();
 
@@ -143,6 +143,35 @@ export async function addOrdersToSupplyReal(
   });
 }
 
+const createOrderListPdf = async ({
+  itemsIds,
+  supplyId,
+  userId,
+  dbName,
+}: {
+  itemsIds: number[];
+  supplyId: string;
+  userId: number;
+  dbName: string;
+}) => {
+  const db = await createOrOpenDatabase(dbName, userId);
+
+  const response = await db.query.productCards.findMany({
+    where: inArray(productCards.id, itemsIds),
+  });
+
+  const htmlContent = <ViewTest data={response} supplyId={supplyId} />;
+
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+  await page.setContent(htmlContent.toString());
+  const pdfBuffer = await page.pdf({ format: "A4" });
+
+  await browser.close();
+
+  return pdfBuffer;
+};
+
 type Supply = {
   closedAt: string;
   scanDt: string;
@@ -242,6 +271,35 @@ app.post("/process-orders", async (c) => {
   }
 });
 
+app.post("/get-order-list-pdf", async (c) => {
+  const token = await extractFromBody(c.req, "token");
+  const dbname = await extractFromBody(c.req, "dbname");
+  const telegramId = await extractFromBody(c.req, "telegramId");
+  const supplyId = await extractFromBody(c.req, "supplyId");
+
+  const ordersOfSupply = await fetch(
+    `${WB_AP_URL}/api/v3/supplies/${supplyId}/orders`,
+    {
+      headers: {
+        Authorization: `${token}`,
+      },
+    }
+  ).then((data) => data.json());
+
+  console.log("ordersOfSupply", ordersOfSupply);
+
+  const itemsIds = ordersOfSupply.orders.map((order: any) => order.nmId);
+
+  const pdfBuffer = await createOrderListPdf({
+    itemsIds,
+    supplyId,
+    userId: telegramId,
+    dbName: dbname,
+  });
+
+  return c.body(pdfBuffer, 200, { "Content-Type": "application/pdf" });
+});
+
 app.post("/getMock", async (c) => {
   const token = await extractFromBody(c.req, "token");
 
@@ -257,7 +315,7 @@ app.post("/getMock", async (c) => {
   return c.json(barCode);
 });
 
-app.post("/getCardsList", async (c) => {
+app.post("/syncDB", async (c) => {
   const token = await extractFromBody(c.req, "token");
   const dbName = await extractFromBody(c.req, "dbname");
   const telegramId = await extractFromBody(c.req, "telegramId");
@@ -270,7 +328,6 @@ app.post("/getCardsList", async (c) => {
   }
 
   const db = await createOrOpenDatabase(dbName, telegramId);
-  // await db.delete(productCards);
 
   const cards = await getProductCards({
     token,
@@ -306,7 +363,7 @@ app.post("/getCardsList", async (c) => {
 
   if (dbInsertResponse.length > 0) {
     return c.json(
-      `Синхронизация прошла успешно, добавлено ${dbInsertResponse.length} новых товаров`
+      `Синхронизация прошла успешно, добавлено/обновлено ${dbInsertResponse.length} карточек товаров`
     );
   }
   return c.json("Новых карточек не обнаружено");

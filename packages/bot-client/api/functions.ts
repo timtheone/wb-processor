@@ -53,9 +53,6 @@ const getLastSupply = async (
       },
     }
   );
-
-  console.log("token", token);
-
   const jsonData = await response.json();
 
   if (jsonData.supplies.length === limit) {
@@ -67,7 +64,6 @@ const getLastSupply = async (
     );
     // Return the last done supply
 
-    console.log("filteredSupplies", filteredSupplies);
     return getDone
       ? filteredSupplies[filteredSupplies.length - 2]
       : filteredSupplies[filteredSupplies.length - 1];
@@ -76,8 +72,6 @@ const getLastSupply = async (
 
 export const getLastSupplyQrCode = async (token: string) => {
   const lastSupply = await getLastSupply(token);
-
-  console.log("lastSupply", lastSupply);
 
   const barCode = await fetch(
     `${WB_AP_URL}/api/v3/supplies/${lastSupply.id}/barcode?type=png`,
