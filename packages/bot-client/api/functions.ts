@@ -55,6 +55,9 @@ const getLastSupply2 = async (
       },
     }
   );
+
+  console.log("token", token);
+
   const jsonData = await response.json();
 
   if (jsonData.supplies.length === limit) {
@@ -66,6 +69,7 @@ const getLastSupply2 = async (
     );
     // Return the last done supply
 
+    console.log("filteredSupplies", filteredSupplies);
     return getDone
       ? filteredSupplies[filteredSupplies.length - 2]
       : filteredSupplies[filteredSupplies.length - 1];
@@ -86,8 +90,6 @@ const getLastSupply = async (
       },
     }
   );
-
-  console.log("token", token);
 
   const jsonData = await response.json();
   let allSupplies: Supply[] = [];
@@ -162,8 +164,7 @@ export const processOrdersReal = async (token: string) => {
   } else {
     supply = lastNotDoneSupply;
   }
-
-  console.log("supply", supply);
+  await simulateDelay(2000);
   /*
       Получаем новые заказы
     */
@@ -174,7 +175,6 @@ export const processOrdersReal = async (token: string) => {
     },
   }).then((data) => data.json());
 
-  console.log("orders", orders);
   const ordersIds = orders.orders.map((order: any) => order.id);
 
   //   /*
@@ -182,7 +182,7 @@ export const processOrdersReal = async (token: string) => {
   //   */
   await addOrdersToSupplyReal(supply.id, ordersIds, token);
 
-  await simulateDelay(1000);
+  await simulateDelay(2000);
 
   //   // Put to delivery
   const response = await fetch(
@@ -194,8 +194,6 @@ export const processOrdersReal = async (token: string) => {
       },
     }
   );
-
-  await simulateDelay(1000);
 
   if (response.status >= 200 && response.status < 300) {
     const barCode = await fetch(
