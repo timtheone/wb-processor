@@ -209,8 +209,6 @@ export const processOrdersReal = async (token: string) => {
 
   console.log("Supply are getting send to delivery end at ", new Date());
 
-  await simulateDelay(1000);
-
   let retryCount = 0;
 
   while (retryCount < MAX_RETRIES) {
