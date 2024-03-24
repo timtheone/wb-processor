@@ -1,4 +1,5 @@
 export function formatDate(date: Date) {
+  date.setHours(date.getHours() + 3);
   // Format the day and month
   const dayMonthOptions = {
     day: "2-digit",
