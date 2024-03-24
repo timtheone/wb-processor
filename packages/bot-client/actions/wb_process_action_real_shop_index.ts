@@ -13,14 +13,14 @@ export function wb_process_action_real_shop_index_Action(
     const shops = await getAllShopsFromUserFromContext(ctx);
     const existingShop = shops.find((shop) => shop.id === shopId);
 
+    console.log("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
+
     const response = await apiClient.processOrders(existingShop?.token!);
 
-    console.log("response", response);
+    // const imgBuffer = Buffer.from(response.file, "base64");
 
-    const imgBuffer = Buffer.from(response.file, "base64");
-
-    await ctx.reply(`Ваш QR код для магазина ${existingShop.name}:`);
-    await ctx.replyWithPhoto({ source: imgBuffer });
-    await ctx.answerCbQuery("QR-код получен.");
+    // await ctx.reply(`Ваш QR код для магазина ${existingShop.name}:`);
+    // await ctx.replyWithPhoto({ source: imgBuffer });
+    // await ctx.answerCbQuery("QR-код получен.");
   });
 }
