@@ -2,7 +2,6 @@ import type { Telegraf } from "telegraf";
 import { apiClient, type MyContext } from "..";
 import type { Update } from "telegraf/types";
 import { getAllShopsFromUserFromContext } from "../entities/Shop/shop";
-import { formatDate } from "../utils/formatDate";
 
 export function wb_process_action_real_shop_index_Action(
   bot: Telegraf<MyContext<Update>>
@@ -14,12 +13,7 @@ export function wb_process_action_real_shop_index_Action(
     const shops = await getAllShopsFromUserFromContext(ctx);
     const existingShop = shops.find((shop) => shop.id === shopId);
 
-    console.log("timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
-
-    const test = formatDate(new Date());
-
-    console.log("test", test);
-    const response = await apiClient.processOrders(existingShop?.token!);
+    // const response = await apiClient.processOrders(existingShop?.token!);
 
     // const imgBuffer = Buffer.from(response.file, "base64");
 
