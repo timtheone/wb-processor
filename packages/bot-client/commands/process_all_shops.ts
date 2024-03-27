@@ -15,7 +15,7 @@ export async function process_all_shops(bot: Telegraf<MyContext<Update>>) {
     await ctx.reply(`Работаем...`);
     await ctx.telegram.sendChatAction(ctx.chat?.id, "typing");
 
-    const fetchPromises = shops.map((shop) => {
+    const fetchPromises = shops.map(async (shop) => {
       return apiClient
         .processOrders(shop.token)
         .then((response) => ({
@@ -102,6 +102,7 @@ export async function process_all_shops(bot: Telegraf<MyContext<Update>>) {
         !orderListResult?.value?.file
       ) {
         // Failure: Notify about the failure
+        console.error("Error processing orders:", result);
         await ctx.reply(
           `Не удалось обработать магазин ${result?.value?.shopName}.`
         );
