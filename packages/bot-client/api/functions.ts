@@ -15,6 +15,7 @@ function simulateDelay(ms: number) {
 }
 
 const WB_AP_URL = "https://suppliers-api.wildberries.ru/";
+const MAX_RETRIES = 10; // Maximum number of retries
 
 export async function addOrdersToSupplyReal(
   supplyId: string,
@@ -32,9 +33,21 @@ export async function addOrdersToSupplyReal(
     )
   );
 
+  results.forEach((result, index) => {
+    if (result.status < 200 && result.status > 300) {
+      console.error(
+        `Failed to add order ${
+          orderIds[index]
+        } to supply ${supplyId} at ${new Date()}`
+      );
+    }
+  });
+
   const allSuccessful = results.every(
     (result) => result.status >= 200 && result.status < 300
   );
+
+  console.log("All successful:", new Date());
 
   if (!allSuccessful) {
     throw new Error("Failed to add order to supply");
@@ -180,12 +193,16 @@ export const processOrdersReal = async (token: string) => {
   //   /*
   //     Добавляем заказы к поставке
   //   */
+  console.log("Orders to add to supply started at:", new Date());
   await addOrdersToSupplyReal(supply.id, ordersIds, token);
+
+  console.log("Orders added to supply ended at:", new Date());
 
   await simulateDelay(2000);
 
+  console.log("Supply are getting send to delivery start at ", new Date());
   //   // Put to delivery
-  const response = await fetch(
+  const deliverResponse = await fetch(
     `${WB_AP_URL}/api/v3/supplies/${supply.id}/deliver`,
     {
       method: "PATCH",
@@ -195,17 +212,45 @@ export const processOrdersReal = async (token: string) => {
     }
   );
 
-  if (response.status >= 200 && response.status < 300) {
-    const barCode = await fetch(
-      `${WB_AP_URL}/api/v3/supplies/${supply.id}/barcode?type=png`,
-      {
-        headers: {
-          Authorization: `${token}`,
-        },
-      }
-    ).then((data) => data.json());
+  console.log("Deliver response", {
+    status: deliverResponse.status,
+    statusText: deliverResponse.statusText,
+  });
 
-    return barCode;
+  console.log("Supply are getting send to delivery end at ", new Date());
+
+  await simulateDelay(1000);
+
+  let retryCount = 0;
+
+  while (retryCount < MAX_RETRIES) {
+    try {
+      let supply = await fetchSupplyData(supplyId, token);
+      if (supply.done) {
+        const barCodeResponse = await fetch(
+          `${WB_AP_URL}/api/v3/supplies/${supplyId}/barcode?type=png`,
+          {
+            headers: {
+              Authorization: `${token}`,
+            },
+          }
+        );
+        const barCode = await barCodeResponse.json();
+        return barCode; // Successfully fetched barcode, return it
+      } else {
+        // supply.done is false, increase retryCount and try again
+        retryCount++;
+        console.log(`Retry #${retryCount}: Supply not ready, retrying...`);
+        await sleep(1000);
+      }
+    } catch (error) {
+      console.error("Error fetching supply or barcode:", error);
+      break; // Exit the loop in case of an error
+    }
+  }
+
+  if (retryCount === MAX_RETRIES) {
+    console.error("Max retries reached without success.");
   }
 };
 
@@ -221,3 +266,21 @@ export const getMock = async (token: string) => {
 
   return barCode;
 };
+
+async function fetchSupplyData(supplyId: string, token: string) {
+  const response = await fetch(`${WB_AP_URL}/api/v3/supplies/${supplyId}`, {
+    headers: {
+      Authorization: `${token}`,
+    },
+  });
+  if (response.status >= 200 && response.status < 300) {
+    const supply = await response.json();
+    return supply;
+  } else {
+    throw new Error(`Failed to fetch supply data: ${response.statusText}`);
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
