@@ -232,6 +232,7 @@ export const processOrdersReal = async (token: string) => {
   while (retryCount < MAX_RETRIES) {
     try {
       let supply = await fetchSupplyData(supplyId, token);
+      console.log("retryCount", retryCount);
       if (supply.done) {
         const barCodeResponse = await fetch(
           `${WB_AP_URL}/api/v3/supplies/${supplyId}/barcode?type=png`,
