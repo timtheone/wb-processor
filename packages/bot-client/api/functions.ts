@@ -174,7 +174,6 @@ export const processOrdersReal = async (token: string) => {
     supply = lastNotDoneSupply;
   }
 
-  const supplyId = supply.id;
   await simulateDelay(2000);
   /*
       Получаем новые заказы
@@ -221,7 +220,7 @@ export const processOrdersReal = async (token: string) => {
         status: deliverResponse.status,
         statusText: deliverResponse.statusText,
         json: json,
-        supplyId: supplyId,
+        supplyId: supply.id,
       });
 
       if (deliverResponse.status >= 200 && deliverResponse.status < 300) {
@@ -247,11 +246,11 @@ export const processOrdersReal = async (token: string) => {
 
   while (retryCount < MAX_RETRIES) {
     try {
-      let supply = await fetchSupplyData(supplyId, token);
+      let localSupply = await fetchSupplyData(supply.id, token);
       console.log("retryCount", retryCount);
-      if (supply.done) {
+      if (localSupply.done) {
         const barCodeResponse = await fetch(
-          `${WB_AP_URL}/api/v3/supplies/${supplyId}/barcode?type=png`,
+          `${WB_AP_URL}/api/v3/supplies/${supply.id}/barcode?type=png`,
           {
             headers: {
               Authorization: `${token}`,
