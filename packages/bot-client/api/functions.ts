@@ -204,24 +204,44 @@ export const processOrdersReal = async (token: string) => {
 
   console.log("Supply are getting send to delivery start at ", new Date());
   //   // Put to delivery
-  const deliverResponse = await fetch(
-    `${WB_AP_URL}/api/v3/supplies/${supply.id}/deliver`,
-    {
-      method: "PATCH",
-      headers: {
-        Authorization: `${token}`,
-      },
+
+  let retryCountDelivery = 0;
+
+  while (retryCountDelivery < MAX_RETRIES) {
+    try {
+      const deliverResponse = await fetch(
+        `${WB_AP_URL}/api/v3/supplies/${supply.id}/deliver`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `${token}`,
+          },
+        }
+      );
+
+      const json = await deliverResponse.json();
+
+      console.log(`Deliver response on try ${retryCountDelivery}`, {
+        status: deliverResponse.status,
+        statusText: deliverResponse.statusText,
+        json: json,
+        supplyId: supplyId,
+      });
+
+      if (deliverResponse.status >= 200 && deliverResponse.status < 300) {
+        break; // Exit the loop in case of success
+      } else {
+        retryCountDelivery++;
+        console.log(
+          `Retry #${retryCountDelivery}: Delivery not successful, retrying...`
+        );
+        await sleep(1000);
+      }
+    } catch (error) {
+      console.error("Error sending the supply to deliver", error);
+      break; // Exit the loop in case of an error
     }
-  );
-
-  const json = await deliverResponse.json();
-
-  console.log("Deliver response", {
-    status: deliverResponse.status,
-    statusText: deliverResponse.statusText,
-    json: json,
-    supplyId: supplyId,
-  });
+  }
 
   console.log("Supply are getting send to delivery end at ", new Date());
 
