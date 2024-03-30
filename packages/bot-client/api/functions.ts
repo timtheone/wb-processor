@@ -177,6 +177,8 @@ export const processOrdersReal = async (token: string) => {
   } else {
     supply = lastNotDoneSupply;
   }
+
+  const supplyId = supply.id;
   await simulateDelay(2000);
   /*
       Получаем новые заказы
@@ -212,9 +214,13 @@ export const processOrdersReal = async (token: string) => {
     }
   );
 
+  const json = await deliverResponse.json();
+
   console.log("Deliver response", {
     status: deliverResponse.status,
     statusText: deliverResponse.statusText,
+    json: json,
+    supplyId: supplyId,
   });
 
   console.log("Supply are getting send to delivery end at ", new Date());
