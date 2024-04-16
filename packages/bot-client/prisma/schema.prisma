@@ -23,7 +23,6 @@ model Shop {
 
 model User {
   id             String   @id @default(uuid())
-  chatId         Int      @unique
   username       String
   telegramUserId String   @unique
   createdAt      DateTime @default(now())
