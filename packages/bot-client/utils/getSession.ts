@@ -22,13 +22,6 @@ export async function getSession(ctx: MyContext) {
   if (!("user" in ctx.session[telegramUserId])) {
     let internalUser = await getUserByTelegramId(telegramUserId);
 
-    if (!internalUser) {
-      internalUser = await createUser({
-        chatId: ctx.chat.id,
-        username: ctx.from.username || "unknown",
-        telegramUserId: telegramUserId,
-      });
-    }
     ctx.session[telegramUserId] = {
       ...ctx.session[telegramUserId],
       user: internalUser,

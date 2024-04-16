@@ -54,41 +54,6 @@ export async function addOrdersToSupplyReal(
   }
 }
 
-const getLastSupply2 = async (
-  token: string,
-  getDone = true,
-  next = 0,
-  limit = 1000
-): Promise<Supply> => {
-  const response = await fetch(
-    `${WB_AP_URL}/api/v3/supplies?limit=${limit}&next=${next}`,
-    {
-      headers: {
-        Authorization: `${token}`,
-      },
-    }
-  );
-
-  console.log("token", token);
-
-  const jsonData = await response.json();
-
-  if (jsonData.supplies.length === limit) {
-    // Return the result of the recursive call
-    return await getLastSupply(token, getDone, jsonData.next);
-  } else {
-    const filteredSupplies = (jsonData.supplies as Supply[]).filter((supply) =>
-      getDone ? supply.done : !supply.done
-    );
-    // Return the last done supply
-
-    console.log("filteredSupplies", filteredSupplies);
-    return getDone
-      ? filteredSupplies[filteredSupplies.length - 2]
-      : filteredSupplies[filteredSupplies.length - 1];
-  }
-};
-
 const getLastSupply = async (
   token: string,
   getDone = true,

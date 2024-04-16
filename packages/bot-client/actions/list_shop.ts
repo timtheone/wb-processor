@@ -2,9 +2,17 @@ import type { Telegraf } from "telegraf";
 import type { MyContext } from "..";
 import type { Update } from "telegraf/types";
 import { getAllShopsFromUserFromContext } from "../entities/Shop/shop";
+import { getSession } from "../utils/getSession";
 
 export function list_shop_Action(bot: Telegraf<MyContext<Update>>) {
   bot.action("list_shop", async (ctx) => {
+    const session = await getSession(ctx);
+
+    if (!session.user) {
+      await ctx.reply("Пользователь не найден.");
+      return;
+    }
+
     const shops = await getAllShopsFromUserFromContext(ctx);
     // Generate a message listing all shops
     const shopList = Object.values(shops)

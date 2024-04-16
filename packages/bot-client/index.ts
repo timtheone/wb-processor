@@ -55,7 +55,7 @@ Bot.use(async (ctx, next) => {
 
     if (!internalUser) {
       internalUser = await createUser({
-        chatId: ctx.chat.id,
+        chatId: Math.abs(ctx.chat.id),
         username: ctx.from.username || "unknown",
         telegramUserId: telegramUserId,
       });

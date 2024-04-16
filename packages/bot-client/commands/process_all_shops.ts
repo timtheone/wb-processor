@@ -6,6 +6,12 @@ import { getSession } from "../utils/getSession";
 
 export async function process_all_shops(bot: Telegraf<MyContext<Update>>) {
   bot.command("process_all_shops", async (ctx) => {
+    const session = await getSession(ctx);
+
+    if (!session.user) {
+      await ctx.reply("Пользователь не найден.");
+      return;
+    }
     const shops = await getAllShopsFromUserFromContext(ctx);
     if (shops.length === 0) {
       await ctx.reply(`У вас нет магазинов`);
