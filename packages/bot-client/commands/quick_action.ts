@@ -2,9 +2,16 @@ import type { Telegraf } from "telegraf";
 import type { MyContext } from "..";
 import type { Update } from "telegraf/types";
 import { getAllShopsFromUserFromContext } from "../entities/Shop/shop";
+import { getSession } from "../utils/getSession";
 
 export function quick_action(bot: Telegraf<MyContext<Update>>) {
   bot.command("quick_action", async (ctx) => {
+    const session = await getSession(ctx);
+
+    if (!session.user) {
+      await ctx.reply("Пользователь не найден.");
+      return;
+    }
     const shops = await getAllShopsFromUserFromContext(ctx);
 
     if (shops.length === 0) {

@@ -2,9 +2,16 @@ import type { Telegraf } from "telegraf";
 import { apiClient, type MyContext } from "..";
 import type { Update } from "telegraf/types";
 import { getAllShopsFromUserFromContext } from "../entities/Shop/shop";
+import { getSession } from "../utils/getSession";
 
 export async function getQrCodesForAllShops(bot: Telegraf<MyContext<Update>>) {
   bot.command("allshops_prev_qrcodes", async (ctx) => {
+    const session = await getSession(ctx);
+
+    if (!session.user) {
+      await ctx.reply("Пользователь не найден.");
+      return;
+    }
     const shops = await getAllShopsFromUserFromContext(ctx);
     if (shops.length === 0) {
       await ctx.reply(`У вас нет магазинов`);
