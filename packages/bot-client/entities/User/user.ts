@@ -1,11 +1,9 @@
 import prisma from "../../prisma/prisma-client";
 
 export async function createUser({
-  chatId,
   username,
   telegramUserId,
 }: {
-  chatId: number | string;
   username: string;
   telegramUserId: string;
 }) {
@@ -24,7 +22,6 @@ export async function createUser({
 
   const user = await prisma.user.create({
     data: {
-      chatId: Number(chatId),
       username: username,
       telegramUserId: telegramUserId,
     },
