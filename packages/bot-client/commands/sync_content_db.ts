@@ -17,7 +17,7 @@ export async function sync_content_shops(bot: Telegraf<MyContext<Update>>) {
 
     const fetchPromises = shops.map((shop) => {
       return apiClient
-        .syncDb(shop.token, shop.name, session.user!.telegramUserId!)
+        .syncDb(shop.token, shop.name, session.user!.dbNameSpaceId!)
         .then((response) => ({
           status: "fulfilled",
           value: response,
@@ -28,6 +28,7 @@ export async function sync_content_shops(bot: Telegraf<MyContext<Update>>) {
 
     // Wait for all fetch promises to settle
     const results = await Promise.allSettled(fetchPromises);
+
     // Process results
     // Process results in the original order
     for (let i = 0; i < shops.length; i++) {
