@@ -1,5 +1,7 @@
 import { formatDate } from "../utils/formatDate";
 
+import { formatDate } from "../utils/formatDate";
+
 type Supply = {
   closedAt: string;
   scanDt: string;
@@ -43,9 +45,21 @@ export async function addOrdersToSupplyReal(
     }
   });
 
+  results.forEach((result, index) => {
+    if (result.status < 200 && result.status > 300) {
+      console.error(
+        `Failed to add order ${
+          orderIds[index]
+        } to supply ${supplyId} at ${new Date()}`
+      );
+    }
+  });
+
   const allSuccessful = results.every(
     (result) => result.status >= 200 && result.status < 300
   );
+
+  console.log("All successful:", new Date());
 
   console.log("All successful:", new Date());
 
@@ -58,7 +72,10 @@ const getLastSupply = async (
   token: string,
   getDone = true,
   offset = 1,
+  offset = 1,
   next = 0,
+  limit = 1000
+): Promise<Supply | null> => {
   limit = 1000
 ): Promise<Supply | null> => {
   const response = await fetch(
@@ -72,6 +89,7 @@ const getLastSupply = async (
 
   const jsonData = await response.json();
   let allSupplies: Supply[] = [];
+  let allSupplies: Supply[] = [];
 
   if (jsonData.supplies.length === limit) {
     // Return the result of the recursive call
@@ -84,7 +102,43 @@ const getLastSupply = async (
       limit
     );
     return restOfSupplies ? restOfSupplies : null;
+    allSupplies = [...allSupplies, ...jsonData.supplies];
+    const restOfSupplies = await getLastSupply(
+      token,
+      getDone,
+      offset,
+      jsonData.next,
+      limit
+    );
+    return restOfSupplies ? restOfSupplies : null;
   } else {
+    allSupplies = [...allSupplies, ...jsonData.supplies];
+  }
+
+  const filteredSupplies = allSupplies.filter((supply) =>
+    getDone ? supply.done : !supply.done
+  );
+
+  // Sort supplies by date
+  const sortedSupplies = filteredSupplies.sort((a, b) => {
+    const dateA = getDone ? new Date(a.closedAt) : new Date(a.createdAt);
+    const dateB = getDone ? new Date(b.closedAt) : new Date(b.createdAt);
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  if (sortedSupplies.length === 0) {
+    return null;
+  }
+
+  // Return the last or second to last supply based on date
+  return getDone ? sortedSupplies[offset] || null : sortedSupplies[0] || null;
+};
+
+export const getLastTwoSupplyIds = async (token: string) => {
+  const lastSupply = await getLastSupply(token, true, 0);
+  const secondToLastSupply = await getLastSupply(token, true, 1);
+
+  return { lastSupply, secondToLastSupply };
     allSupplies = [...allSupplies, ...jsonData.supplies];
   }
 
@@ -138,6 +192,7 @@ export const processOrdersReal = async (token: string) => {
      Создаем поставку
    */
     const newDate = new Date();
+    const newDate = new Date();
     supply = await fetch(`${WB_AP_URL}/api/v3/supplies`, {
       method: "POST",
       headers: {
@@ -146,12 +201,14 @@ export const processOrdersReal = async (token: string) => {
       },
       body: JSON.stringify({
         name: formatDate(newDate),
+        name: formatDate(newDate),
       }),
     }).then((data) => data.json());
   } else {
     supply = lastNotDoneSupply;
   }
 
+  await simulateDelay(2000);
   await simulateDelay(2000);
   /*
       Получаем новые заказы
@@ -169,8 +226,12 @@ export const processOrdersReal = async (token: string) => {
   //     Добавляем заказы к поставке
   //   */
   console.log("Orders to add to supply started at:", new Date());
+  console.log("Orders to add to supply started at:", new Date());
   await addOrdersToSupplyReal(supply.id, ordersIds, token);
 
+  console.log("Orders added to supply ended at:", new Date());
+
+  await simulateDelay(2000);
   console.log("Orders added to supply ended at:", new Date());
 
   await simulateDelay(2000);
@@ -201,54 +262,17 @@ export const processOrdersReal = async (token: string) => {
         supplyId: supply.id,
       });
 
-      if (deliverResponse.status >= 200 && deliverResponse.status < 300) {
-        break; // Exit the loop in case of success
-      } else {
-        retryCountDelivery++;
-        console.log(
-          `Retry #${retryCountDelivery}: Delivery not successful, retrying...`
-        );
-        await sleep(1000);
+  if (response.status >= 200 && response.status < 300) {
+    const barCode = await fetch(
+      `${WB_AP_URL}/api/v3/supplies/${supply.id}/barcode?type=png`,
+      {
+        headers: {
+          Authorization: `${token}`,
+        },
       }
-    } catch (error) {
-      console.error("Error sending the supply to deliver", error);
-      break; // Exit the loop in case of an error
-    }
-  }
+    ).then((data) => data.json());
 
-  console.log("Supply are getting send to delivery end at ", new Date());
-
-  let retryCount = 0;
-
-  while (retryCount < MAX_RETRIES) {
-    try {
-      let localSupply = await fetchSupplyData(supply.id, token);
-      console.log("retryCount", retryCount);
-      if (localSupply.done) {
-        const barCodeResponse = await fetch(
-          `${WB_AP_URL}/api/v3/supplies/${supply.id}/barcode?type=png`,
-          {
-            headers: {
-              Authorization: `${token}`,
-            },
-          }
-        );
-        const barCode = await barCodeResponse.json();
-        return barCode; // Successfully fetched barcode, return it
-      } else {
-        // supply.done is false, increase retryCount and try again
-        retryCount++;
-        console.log(`Retry #${retryCount}: Supply not ready, retrying...`);
-        await sleep(1000);
-      }
-    } catch (error) {
-      console.error("Error fetching supply or barcode:", error);
-      break; // Exit the loop in case of an error
-    }
-  }
-
-  if (retryCount === MAX_RETRIES) {
-    console.error("Max retries reached without success.");
+    return barCode;
   }
 };
 
@@ -264,6 +288,24 @@ export const getMock = async (token: string) => {
 
   return barCode;
 };
+
+async function fetchSupplyData(supplyId: string, token: string) {
+  const response = await fetch(`${WB_AP_URL}/api/v3/supplies/${supplyId}`, {
+    headers: {
+      Authorization: `${token}`,
+    },
+  });
+  if (response.status >= 200 && response.status < 300) {
+    const supply = await response.json();
+    return supply;
+  } else {
+    throw new Error(`Failed to fetch supply data: ${response.statusText}`);
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function fetchSupplyData(supplyId: string, token: string) {
   const response = await fetch(`${WB_AP_URL}/api/v3/supplies/${supplyId}`, {
