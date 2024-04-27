@@ -1,4 +1,9 @@
-import { getLastSupplyQrCode, getMock, processOrdersReal } from "./functions";
+import {
+  getLastSupplyQrCode,
+  getMock,
+  processOrdersReal,
+  getLastTwoSupplyIds,
+} from "./functions";
 
 export class ApiClient {
   private static instance: ApiClient;
@@ -39,31 +44,27 @@ export class ApiClient {
     }
   }
 
-  async getOrderListPdf({
-    token,
-    dbname,
-    telegramId,
-    supplyId,
-  }: {
-    token: string;
-    dbname: string;
-    telegramId: string;
-    supplyId: string;
-  }): Promise<any> {
-    const response = await this.fetchWithTimeout(
-      `${this.apiUrl}/get-order-list-pdf`,
+  async getLastTwoSupplies(token: string): Promise<any> {
+    const { lastSupply, secondToLastSupply } = await getLastTwoSupplyIds(token);
+    return {
+      lastSupplyId: lastSupply?.id,
+      secondToLastSupplyId: secondToLastSupply?.id,
+    };
+  }
+
+  async getOrderListPdfCombinedShops(
+    list: "order" | "stickers",
+    shopsPayload: string
+  ): Promise<any> {
+    console.log("getOrderListPdfCombinedShops call initiated");
+    const response = await fetch(
+      `${this.apiUrl}/get-${list}-list-pdf-combined-shops`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/pdf",
         },
-        body: JSON.stringify({
-          token,
-          dbname,
-          telegramId,
-          supplyId,
-        }),
-        timeout: 10000, // 10 Seconds timeout
+        body: shopsPayload,
       }
     );
 
@@ -84,7 +85,7 @@ export class ApiClient {
     telegramId: string
   ): Promise<any> {
     try {
-      const response = await this.fetchWithTimeout(`${this.apiUrl}/syncDB`, {
+      const response = await fetch(`${this.apiUrl}/syncDB`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -94,8 +95,9 @@ export class ApiClient {
           dbname,
           telegramId,
         }),
-        timeout: 10000, // 10 Seconds timeout
       });
+
+      console.log("response", response);
 
       if (!response.ok) {
         throw new Error("Failed to sync db");
@@ -121,8 +123,8 @@ export class ApiClient {
       //     timeout: 10000, // 10 Seconds timeout
       //   }
       // );
-      // return await processOrdersReal(token);
-      return await getMock(token);
+      return await processOrdersReal(token);
+      // return await getMock(token);
 
       // if (!response.ok) {
       //   throw new Error("Failed to process orders");

@@ -8,6 +8,7 @@ import { process_all_shops } from "./process_all_shops";
 import { quick_action } from "./quick_action";
 import { getQrCodesForAllShops } from "./get_previous_qr_codes_for_all_shops";
 import { sync_content_shops } from "./sync_content_db";
+import { get_combined_pdf_lists } from "./get_combined_pdf_lists";
 
 export const attachCommands = (
   bot: Telegraf<MyContext<Update>>,
@@ -27,5 +28,6 @@ export const setupCommands = (Bot: Telegraf<MyContext<Update>>) => {
     quick_action,
     getQrCodesForAllShops,
     sync_content_shops,
+    get_combined_pdf_lists,
   ]);
 };

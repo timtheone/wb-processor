@@ -6,9 +6,10 @@ import { productCards } from "../db/schema";
 import { inArray, sql } from "drizzle-orm";
 import { createOrOpenDatabase } from "../db/createDb";
 import puppeteer from "puppeteer";
-import { ViewTest } from "./pdfCreator/View";
 
-const WB_AP_URL = "https://suppliers-api.wildberries.ru/";
+import { ViewCombined } from "./pdfCreator/ViewCombined";
+import { Stickers } from "./pdfCreator/Stickers";
+import { performDbSync } from "./utils/performDbSync";
 
 const app = new Hono();
 
@@ -23,6 +24,103 @@ app.get("/", (c) => {
   return c.text("Hello Hono!");
 });
 
+async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
+  function chunkArray(array: number[], size: number) {
+    const chunked_arr = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunked_arr.push(array.slice(i, i + size));
+    }
+    return chunked_arr;
+  }
+
+  async function fetchStickers(token: string, orderIds: number[]) {
+    const batchSize = 100;
+    const batches = chunkArray(orderIds, batchSize);
+    const allStickers = [];
+
+    for (const batch of batches) {
+      const response = await fetch(
+        `${Bun.env.WB_AP_URL}/api/v3/orders/stickers?type=svg&width=58&height=40`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            orders: batch,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        console.error(
+          `Failed to fetch stickers for batch: ${response.status} ${response.statusText}`
+        );
+        continue; // Skip this batch or handle error appropriately
+      }
+
+      const batchStickers = await response.json();
+      allStickers.push(...batchStickers.stickers); // Assuming API response structure
+    }
+
+    return allStickers;
+  }
+
+  const groupedOrders = new Map();
+
+  await Promise.all(
+    shops.map(async (shop) => {
+      await Promise.all(
+        shop.supplyIds.map(async (id) => {
+          // Fetch orders for each supply ID
+          const response = await fetch(
+            `${Bun.env.WB_AP_URL}/api/v3/supplies/${id}/orders`,
+            {
+              headers: {
+                Authorization: `${shop.token}`,
+              },
+            }
+          );
+          const orders = await response.json();
+
+          // Get order IDs from the orders
+          const orderIds = orders.orders.map((order) => order.id);
+
+          // Fetch stickers for the orders
+          const stickers = await fetchStickers(shop.token, orderIds);
+
+          // Enrich orders with stickers data
+          const enrichedOrders = orders.orders.map((order) => ({
+            ...order,
+            stickers:
+              stickers.find((sticker) => sticker.orderId === order.id) || null,
+          }));
+
+          // Collect the enriched orders grouped by dbname
+          const existingEntries = groupedOrders.get(shop.dbname) || [];
+          existingEntries.push({
+            orders: enrichedOrders,
+            supplyId: id,
+            telegramId: shop.telegramId,
+          });
+          groupedOrders.set(shop.dbname, existingEntries);
+        })
+      );
+    })
+  );
+
+  const ordersOfSupplyOfShops = Array.from(groupedOrders).map(
+    ([key, value]) => ({
+      [key]: value,
+    })
+  );
+
+  const flattenedData: OrdersOfSupplyOfShopsEnriched[] =
+    ordersOfSupplyOfShops.flat();
+  return flattenedData;
+}
+
 const getLastSupply = async (
   token: string,
   getDone = true,
@@ -30,7 +128,7 @@ const getLastSupply = async (
   limit = 200
 ): Promise<Supply> => {
   const response = await fetch(
-    `${WB_AP_URL}/api/v3/supplies?limit=${limit}&next=${next}`,
+    `${Bun.env.WB_AP_URL}/api/v3/supplies?limit=${limit}&next=${next}`,
     {
       headers: {
         Authorization: `${token}`,
@@ -91,13 +189,16 @@ const getProductCards = async ({
     return body;
   };
 
-  const response = await fetch(`${WB_AP_URL}/content/v2/get/cards/list`, {
-    headers: {
-      Authorization: token,
-    },
-    method: "POST",
-    body: JSON.stringify(buildBody()),
-  }).then((data) => data.json());
+  const response = await fetch(
+    `${Bun.env.WB_AP_URL}/content/v2/get/cards/list`,
+    {
+      headers: {
+        Authorization: token,
+      },
+      method: "POST",
+      body: JSON.stringify(buildBody()),
+    }
+  ).then((data) => data.json());
 
   // Initialize completeData with response.cards or an empty array if it's undefined
   let completeData = response.cards || [];
@@ -127,12 +228,15 @@ export async function addOrdersToSupplyReal(
 ): Promise<void> {
   const results = await Promise.all(
     orderIds.map((orderId) =>
-      fetch(`${WB_AP_URL}/api/v3/supplies/${supplyId}/orders/${orderId}`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `${token}`,
-        },
-      })
+      fetch(
+        `${Bun.env.WB_AP_URL}/api/v3/supplies/${supplyId}/orders/${orderId}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `${token}`,
+          },
+        }
+      )
     )
   );
 
@@ -143,33 +247,162 @@ export async function addOrdersToSupplyReal(
   });
 }
 
-const createOrderListPdf = async ({
-  itemsIds,
-  supplyId,
-  userId,
-  dbName,
+const createOrderListForShopsCombinedPdf = async ({
+  data,
+  file,
 }: {
-  itemsIds: number[];
-  supplyId: string;
-  userId: number;
-  dbName: string;
+  data: OrdersOfSupplyOfShopsEnriched[];
+  file: "orderList" | "stickers";
 }) => {
-  const db = await createOrOpenDatabase(dbName, userId);
+  console.log("pdf-generation started");
+  const dbs = await Promise.all(
+    data.map((shopObject) => {
+      // Each shopObject has one key-value pair, the key being the dbname and value being the array of order details
+      const dbname = Object.keys(shopObject)[0];
+      const telegramId = shopObject[dbname][0].telegramId; // Assuming the telegramId is the same for all entries in a shop
 
-  const response = await db.query.productCards.findMany({
-    where: inArray(productCards.id, itemsIds),
+      return createOrOpenDatabase(dbname, telegramId);
+    })
+  );
+  const responses = await Promise.all(
+    data.map((shopObject, index) => {
+      const dbname = Object.keys(shopObject)[0];
+      const db = dbs[index];
+
+      // Create nmId to multiple orders map
+      const ordersMap = new Map();
+      shopObject[dbname].forEach((shop) =>
+        shop.orders.forEach((order) => {
+          if (!ordersMap.has(order.nmId)) {
+            ordersMap.set(order.nmId, []);
+          }
+          if (!order.stickers) {
+            console.log("order", order);
+          }
+          ordersMap
+            .get(order.nmId)
+            .push({ orderId: order.id, stickers: order.stickers });
+        })
+      );
+
+      // Extract unique itemIds from all orders within the current shop
+      const uniqueItemIds = Array.from(ordersMap.keys());
+
+      // Perform database query for the extracted unique itemIds
+      return db.query.productCards
+        .findMany({
+          where: inArray(productCards.id, uniqueItemIds),
+        })
+        .then((products) => {
+          // For each product, create entries for each order linked to it
+          const enrichedProducts = [];
+          products.forEach((product) => {
+            const orders = ordersMap.get(product.id);
+            if (orders) {
+              orders.forEach((order) => {
+                enrichedProducts.push({
+                  ...product,
+                  stickers: order.stickers,
+                  orderId: order.orderId,
+                });
+              });
+            }
+          });
+          return enrichedProducts;
+        });
+    })
+  );
+
+  // Flatten and sort the final responses
+  const flattenedSortedResponses = responses.flat().sort((a, b) => {
+    if (a.title && b.title) {
+      return a.title.localeCompare(b.title, "ru");
+    } else if (a.title) {
+      return -1; // Consider items with null titles as greater
+    } else {
+      return 1;
+    }
   });
 
-  const htmlContent = <ViewTest data={response} supplyId={supplyId} />;
+  if (file === "orderList") {
+    const htmlContent = (
+      <ViewCombined
+        data={flattenedSortedResponses}
+        supplyIds={data
+          .map((shopObject, index) => {
+            const dbname = Object.keys(shopObject)[0];
 
-  const browser = await puppeteer.launch();
-  const page = await browser.newPage();
-  await page.setContent(htmlContent.toString());
-  const pdfBuffer = await page.pdf({ format: "A4" });
+            // Extract itemIds from all orders within the current shop
+            return shopObject[dbname].flatMap(
+              (shop) => `${shop.supplyId} - ${shop.orders.length} Товаров`
+            );
+          })
+          .flat()}
+      />
+    );
 
-  await browser.close();
+    const browser = await puppeteer.launch({ headless: true });
 
-  return pdfBuffer;
+    try {
+      const page = await browser.newPage();
+      await page.setContent(htmlContent.toString(), {
+        waitUntil: "networkidle0",
+      });
+
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: {
+          top: "5mm",
+          bottom: "5mm",
+          left: "3mm",
+          right: "5mm",
+        },
+      });
+
+      return pdfBuffer;
+    } catch (error) {
+      throw new Error("Failed to create PDF");
+    } finally {
+      await browser.close();
+    }
+
+    // return htmlContent;
+  } else {
+    const stickers = flattenedSortedResponses
+      .map((response) => {
+        if (!response.stickers) {
+          console.log("response", response);
+        }
+        return {
+          file: response.stickers.file,
+        };
+      })
+      .flat();
+
+    const stickersHtml = <Stickers data={stickers} />;
+    const browser = await puppeteer.launch();
+    try {
+      const pageStickers = await browser.newPage();
+      await pageStickers.setContent(stickersHtml.toString(), {
+        waitUntil: "networkidle0",
+      });
+      console.log("setting content finished");
+      const stickersHtmlBuffer = await pageStickers.pdf({
+        width: "1.57in",
+        height: "1.18in",
+      });
+
+      console.log("pdf created");
+
+      return stickersHtmlBuffer;
+    } catch (error) {
+      throw new Error("Failed to create stickers PDF");
+    } finally {
+      await browser.close();
+    }
+    // return stickersHtml;
+  }
 };
 
 type Supply = {
@@ -182,13 +415,43 @@ type Supply = {
   done: boolean;
 };
 
+type ShopsPayload = {
+  token: string;
+  dbname: string;
+  telegramId: string;
+  supplyIds: string[];
+};
+
+type Order = {
+  user: string | null;
+  orderUid: string;
+  article: string;
+  rid: string;
+  createdAt: string;
+  offices: string[];
+  skus: string[];
+  id: string;
+  warehouseId: number;
+  nmId: number;
+  chrtId: number;
+  price: number;
+  convertedPrice: number;
+  currencyCode: number;
+  convertedCurrencyCode: number;
+  cargoType: number;
+};
+
+type OrdersOfSupplyOfShopsEnriched = {
+  [key: string]: { orders: Array<Order & { stickers: any }>; supplyId: string };
+};
+
 app.post("get_previous_code", async (c) => {
   const token = await extractFromBody(c.req, "token");
 
   const lastSupply = await getLastSupply(token);
 
   const barCode = await fetch(
-    `${WB_AP_URL}/api/v3/supplies/${lastSupply.id}/barcode?type=png`,
+    `${Bun.env.WB_AP_URL}/api/v3/supplies/${lastSupply.id}/barcode?type=png`,
     {
       headers: {
         Authorization: `${token}`,
@@ -209,7 +472,7 @@ app.post("/process-orders", async (c) => {
     /* 
      Создаем поставку
    */
-    supply = await fetch(`${WB_AP_URL}/api/v3/supplies`, {
+    supply = await fetch(`${Bun.env.WB_AP_URL}/api/v3/supplies`, {
       method: "POST",
       headers: {
         Authorization: `${token}`,
@@ -227,7 +490,7 @@ app.post("/process-orders", async (c) => {
   /*
       Получаем новые заказы
     */
-  const orders = await fetch(`${WB_AP_URL}/api/v3/orders/new`, {
+  const orders = await fetch(`${Bun.env.WB_AP_URL}/api/v3/orders/new`, {
     method: "GET",
     headers: {
       Authorization: `${token}`,
@@ -246,7 +509,7 @@ app.post("/process-orders", async (c) => {
 
   //   // Put to delivery
   const response = await fetch(
-    `${WB_AP_URL}/api/v3/supplies/${supply.id}/deliver`,
+    `${Bun.env.WB_AP_URL}/api/v3/supplies/${supply.id}/deliver`,
     {
       method: "PATCH",
       headers: {
@@ -259,7 +522,7 @@ app.post("/process-orders", async (c) => {
 
   if (response.status >= 200 && response.status < 300) {
     const barCode = await fetch(
-      `${WB_AP_URL}/api/v3/supplies/${supply.id}/barcode?type=png`,
+      `${Bun.env.WB_AP_URL}/api/v3/supplies/${supply.id}/barcode?type=png`,
       {
         headers: {
           Authorization: `${token}`,
@@ -271,40 +534,42 @@ app.post("/process-orders", async (c) => {
   }
 });
 
-app.post("/get-order-list-pdf", async (c) => {
-  const token = await extractFromBody(c.req, "token");
-  const dbname = await extractFromBody(c.req, "dbname");
-  const telegramId = await extractFromBody(c.req, "telegramId");
-  const supplyId = await extractFromBody(c.req, "supplyId");
+app.post("/get-order-list-pdf-combined-shops", async (c) => {
+  const shops: ShopsPayload[] = await extractFromBody(c.req, "shops");
 
-  const ordersOfSupply = await fetch(
-    `${WB_AP_URL}/api/v3/supplies/${supplyId}/orders`,
-    {
-      headers: {
-        Authorization: `${token}`,
-      },
-    }
-  ).then((data) => data.json());
+  const flattenedData: OrdersOfSupplyOfShopsEnriched[] =
+    await getCombinedOrderAndStickerList(shops);
 
-  console.log("ordersOfSupply", ordersOfSupply);
-
-  const itemsIds = ordersOfSupply.orders.map((order: any) => order.nmId);
-
-  const pdfBuffer = await createOrderListPdf({
-    itemsIds,
-    supplyId,
-    userId: telegramId,
-    dbName: dbname,
+  const fileBuffer = await createOrderListForShopsCombinedPdf({
+    data: flattenedData,
+    file: "orderList",
   });
 
-  return c.body(pdfBuffer, 200, { "Content-Type": "application/pdf" });
+  return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
+  // return c.html(fileBuffer);
+});
+
+app.post("/get-stickers-list-pdf-combined-shops", async (c) => {
+  console.log("get-stickers-list-pdf-combined-shops calling");
+  const shops: ShopsPayload[] = await extractFromBody(c.req, "shops");
+
+  const flattenedData: OrdersOfSupplyOfShopsEnriched[] =
+    await getCombinedOrderAndStickerList(shops);
+
+  const fileBuffer = await createOrderListForShopsCombinedPdf({
+    data: flattenedData,
+    file: "stickers",
+  });
+
+  return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
+  // return c.html(fileBuffer);
 });
 
 app.post("/getMock", async (c) => {
   const token = await extractFromBody(c.req, "token");
 
   const barCode = await fetch(
-    `${WB_AP_URL}/api/v3/supplies/WB-GI-77468523/barcode?type=png`,
+    `${Bun.env.WB_AP_URL}/api/v3/supplies/WB-GI-77468523/barcode?type=png`,
     {
       headers: {
         Authorization: `${token}`,
@@ -319,7 +584,7 @@ app.post("/syncDB", async (c) => {
   const token = await extractFromBody(c.req, "token");
   const dbName = await extractFromBody(c.req, "dbname");
   const telegramId = await extractFromBody(c.req, "telegramId");
-  const dbNameRegex = /^[a-z0-9-_]+$/;
+  const dbNameRegex = /^[a-zA-Z0-9-_]+$/;
 
   const isDbNameValid = dbNameRegex.test(dbName);
 
@@ -327,39 +592,7 @@ app.post("/syncDB", async (c) => {
     return c.json("Некоректное имя базы данных");
   }
 
-  const db = await createOrOpenDatabase(dbName, telegramId);
-
-  const cards = await getProductCards({
-    token,
-    limit: 1000,
-  });
-
-  const transformedData = cards.map((card) => ({
-    id: card.nmID,
-    vendorCode: card.vendorCode,
-    brand: card.brand,
-    title: card.title,
-    img: card.photos[0].big,
-    createdAt: card.createdAt,
-    updatedAt: card.updatedAt,
-  }));
-
-  const dbInsertResponse = await db
-    .insert(productCards)
-    .values(transformedData)
-    .onConflictDoUpdate({
-      target: productCards.id,
-      set: {
-        vendorCode: sql`EXCLUDED.vendorCode`,
-        brand: sql`EXCLUDED.brand`,
-        title: sql`EXCLUDED.title`,
-        img: sql`EXCLUDED.img`,
-        updatedAt: sql`EXCLUDED.updatedAt`,
-        createdAt: sql`EXCLUDED.createdAt`,
-      },
-      where: sql`productCards.updatedAt < EXCLUDED.updatedAt`,
-    })
-    .returning({ insertedId: productCards.id });
+  const dbInsertResponse = await performDbSync(dbName, telegramId, token);
 
   if (dbInsertResponse.length > 0) {
     return c.json(
@@ -368,5 +601,7 @@ app.post("/syncDB", async (c) => {
   }
   return c.json("Новых карточек не обнаружено");
 });
+
+new Worker(new URL("./jobs/dbSyncJob.ts", import.meta.url).href);
 
 export default app;

@@ -57,6 +57,7 @@ export async function addOrdersToSupplyReal(
 const getLastSupply = async (
   token: string,
   getDone = true,
+  offset = 1,
   next = 0,
   limit = 1000
 ): Promise<Supply | null> => {
@@ -78,6 +79,7 @@ const getLastSupply = async (
     const restOfSupplies = await getLastSupply(
       token,
       getDone,
+      offset,
       jsonData.next,
       limit
     );
@@ -102,7 +104,14 @@ const getLastSupply = async (
   }
 
   // Return the last or second to last supply based on date
-  return getDone ? sortedSupplies[1] || null : sortedSupplies[0] || null;
+  return getDone ? sortedSupplies[offset] || null : sortedSupplies[0] || null;
+};
+
+export const getLastTwoSupplyIds = async (token: string) => {
+  const lastSupply = await getLastSupply(token, true, 0);
+  const secondToLastSupply = await getLastSupply(token, true, 1);
+
+  return { lastSupply, secondToLastSupply };
 };
 
 export const getLastSupplyQrCode = async (token: string) => {

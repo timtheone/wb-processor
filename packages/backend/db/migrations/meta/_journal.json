@@ -15,6 +15,20 @@
       "when": 1709562298140,
       "tag": "0001_curvy_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1713891341878,
+      "tag": "0002_demonic_black_panther",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1714213851219,
+      "tag": "0003_fearless_captain_marvel",
+      "breakpoints": true
     }
   ]
 }

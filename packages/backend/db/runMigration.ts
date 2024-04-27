@@ -1,10 +1,17 @@
 import { drizzle } from "drizzle-orm/bun-sqlite";
-import { Database } from "bun:sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import { getDbs } from "./getDbs";
 
-const sqlite = new Database(`${import.meta.dirname}/dbs/sqlite.db`);
-export const db = drizzle(sqlite);
+async function migrateDb() {
+  const databases = await getDbs();
 
-migrate(db, { migrationsFolder: `${import.meta.dirname}/migrations` });
+  for (const db of databases) {
+    migrate(drizzle(db), {
+      migrationsFolder: `${import.meta.dirname}/migrations`,
+    });
 
-sqlite.close();
+    db.close();
+  }
+}
+
+migrateDb();

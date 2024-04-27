@@ -6,6 +6,12 @@ export const productCards = sqliteTable("productCards", {
   brand: text("brand"),
   title: text("title"),
   img: text("img"),
+  ageGroup: text("ageGroup"),
   updatedAt: text("updatedAt"),
   createdAt: text("createdAt"),
+});
+
+export const shopToken = sqliteTable("shopToken", {
+  id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+  token: text("token"),
 });
