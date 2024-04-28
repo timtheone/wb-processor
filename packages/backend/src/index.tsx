@@ -312,7 +312,10 @@ const createOrderListForShopsCombinedPdf = async ({
       />
     );
 
-    const browser = await puppeteer.launch({ headless: true });
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
 
     try {
       const page = await browser.newPage();
@@ -352,7 +355,9 @@ const createOrderListForShopsCombinedPdf = async ({
       .flat();
 
     const stickersHtml = <Stickers data={stickers} />;
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
     try {
       const pageStickers = await browser.newPage();
       await pageStickers.setContent(stickersHtml.toString(), {
