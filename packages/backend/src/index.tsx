@@ -24,6 +24,36 @@ app.get("/", (c) => {
   return c.text("Hello Hono!");
 });
 
+type ShopsPayload = {
+  token: string;
+  dbname: string;
+  telegramId: string;
+  supplyIds: string[];
+};
+
+type Order = {
+  user: string | null;
+  orderUid: string;
+  article: string;
+  rid: string;
+  createdAt: string;
+  offices: string[];
+  skus: string[];
+  id: string;
+  warehouseId: number;
+  nmId: number;
+  chrtId: number;
+  price: number;
+  convertedPrice: number;
+  currencyCode: number;
+  convertedCurrencyCode: number;
+  cargoType: number;
+};
+
+type OrdersOfSupplyOfShopsEnriched = {
+  [key: string]: { orders: Array<Order & { stickers: any }>; supplyId: string };
+};
+
 async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
   function chunkArray(array: number[], size: number) {
     const chunked_arr = [];
@@ -121,39 +151,6 @@ async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
   return flattenedData;
 }
 
-const getLastSupply = async (
-  token: string,
-  getDone = true,
-  next = 0,
-  limit = 200
-): Promise<Supply> => {
-  const response = await fetch(
-    `${Bun.env.WB_AP_URL}/api/v3/supplies?limit=${limit}&next=${next}`,
-    {
-      headers: {
-        Authorization: `${token}`,
-      },
-    }
-  );
-
-  const jsonData = await response.json();
-
-  if (jsonData.supplies.length === limit) {
-    // Return the result of the recursive call
-    return await getLastSupply(token, getDone, jsonData.next);
-  } else {
-    const filteredSupplies = (jsonData.supplies as Supply[]).filter((supply) =>
-      getDone ? supply.done : !supply.done
-    );
-    // Return the last done supply
-
-    console.log("filteredSupplies", filteredSupplies);
-    return getDone
-      ? filteredSupplies[filteredSupplies.length - 2]
-      : filteredSupplies[filteredSupplies.length - 1];
-  }
-};
-
 const getProductCards = async ({
   token,
   limit,
@@ -220,32 +217,6 @@ const getProductCards = async ({
 
   return completeData;
 };
-
-export async function addOrdersToSupplyReal(
-  supplyId: string,
-  orderIds: number[],
-  token: string
-): Promise<void> {
-  const results = await Promise.all(
-    orderIds.map((orderId) =>
-      fetch(
-        `${Bun.env.WB_AP_URL}/api/v3/supplies/${supplyId}/orders/${orderId}`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `${token}`,
-          },
-        }
-      )
-    )
-  );
-
-  results.forEach((result) => {
-    if (!result.ok) {
-      throw new Error("Failed to add order to supply");
-    }
-  });
-}
 
 const createOrderListForShopsCombinedPdf = async ({
   data,
@@ -405,135 +376,6 @@ const createOrderListForShopsCombinedPdf = async ({
   }
 };
 
-type Supply = {
-  closedAt: string;
-  scanDt: string;
-  id: string;
-  name: string;
-  createdAt: string;
-  cargoType: number;
-  done: boolean;
-};
-
-type ShopsPayload = {
-  token: string;
-  dbname: string;
-  telegramId: string;
-  supplyIds: string[];
-};
-
-type Order = {
-  user: string | null;
-  orderUid: string;
-  article: string;
-  rid: string;
-  createdAt: string;
-  offices: string[];
-  skus: string[];
-  id: string;
-  warehouseId: number;
-  nmId: number;
-  chrtId: number;
-  price: number;
-  convertedPrice: number;
-  currencyCode: number;
-  convertedCurrencyCode: number;
-  cargoType: number;
-};
-
-type OrdersOfSupplyOfShopsEnriched = {
-  [key: string]: { orders: Array<Order & { stickers: any }>; supplyId: string };
-};
-
-app.post("get_previous_code", async (c) => {
-  const token = await extractFromBody(c.req, "token");
-
-  const lastSupply = await getLastSupply(token);
-
-  const barCode = await fetch(
-    `${Bun.env.WB_AP_URL}/api/v3/supplies/${lastSupply.id}/barcode?type=png`,
-    {
-      headers: {
-        Authorization: `${token}`,
-      },
-    }
-  ).then((data) => data.json());
-
-  return c.json(barCode);
-});
-
-app.post("/process-orders", async (c) => {
-  const token = await extractFromBody(c.req, "token");
-
-  const lastNotDoneSupply = await getLastSupply(token, false);
-  let supply;
-
-  if (!lastNotDoneSupply) {
-    /* 
-     Создаем поставку
-   */
-    supply = await fetch(`${Bun.env.WB_AP_URL}/api/v3/supplies`, {
-      method: "POST",
-      headers: {
-        Authorization: `${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: "Тестовая поставка от Тимура2",
-      }),
-    }).then((data) => data.json());
-  } else {
-    supply = lastNotDoneSupply;
-  }
-
-  console.log("supply", supply);
-  /*
-      Получаем новые заказы
-    */
-  const orders = await fetch(`${Bun.env.WB_AP_URL}/api/v3/orders/new`, {
-    method: "GET",
-    headers: {
-      Authorization: `${token}`,
-    },
-  }).then((data) => data.json());
-
-  console.log("orders", orders);
-  const ordersIds = orders.orders.map((order: any) => order.id);
-
-  //   /*
-  //     Добавляем заказы к поставке
-  //   */
-  await addOrdersToSupplyReal(supply.id, ordersIds, token);
-
-  await simulateDelay(1000);
-
-  //   // Put to delivery
-  const response = await fetch(
-    `${Bun.env.WB_AP_URL}/api/v3/supplies/${supply.id}/deliver`,
-    {
-      method: "PATCH",
-      headers: {
-        Authorization: `${token}`,
-      },
-    }
-  );
-
-  await simulateDelay(1000);
-
-  if (response.status >= 200 && response.status < 300) {
-    const barCode = await fetch(
-      `${Bun.env.WB_AP_URL}/api/v3/supplies/${supply.id}/barcode?type=png`,
-      {
-        headers: {
-          Authorization: `${token}`,
-        },
-      }
-    ).then((data) => data.json());
-
-    return barCode;
-  }
-});
-
 app.post("/get-order-list-pdf-combined-shops", async (c) => {
   const shops: ShopsPayload[] = await extractFromBody(c.req, "shops");
 
@@ -563,21 +405,6 @@ app.post("/get-stickers-list-pdf-combined-shops", async (c) => {
 
   return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
   // return c.html(fileBuffer);
-});
-
-app.post("/getMock", async (c) => {
-  const token = await extractFromBody(c.req, "token");
-
-  const barCode = await fetch(
-    `${Bun.env.WB_AP_URL}/api/v3/supplies/WB-GI-77468523/barcode?type=png`,
-    {
-      headers: {
-        Authorization: `${token}`,
-      },
-    }
-  ).then((data) => data.json());
-
-  return c.json(barCode);
 });
 
 app.post("/syncDB", async (c) => {

@@ -41,8 +41,6 @@ export async function get_combined_pdf_lists(bot: Telegraf<MyContext<Update>>) {
       return;
     }
 
-    console.log("supplyIdsPromisesResults received", supplyIdsPromisesResults);
-
     const payload = shops.map((shop) => {
       return {
         token: shop.token,
@@ -57,8 +55,6 @@ export async function get_combined_pdf_lists(bot: Telegraf<MyContext<Update>>) {
     const apiPayload = JSON.stringify({
       shops: payload,
     });
-
-    console.log("apiPayload", apiPayload);
 
     const orderListPdf = await apiClient.getOrderListPdfCombinedShops(
       "order",

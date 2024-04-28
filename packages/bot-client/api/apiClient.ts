@@ -112,25 +112,7 @@ export class ApiClient {
 
   async processOrders(token: string): Promise<any> {
     try {
-      // const response = await this.fetchWithTimeout(
-      //   `${this.apiUrl}/process-orders`,
-      //   {
-      //     method: "POST",
-      //     headers: {
-      //       "Content-Type": "application/json",
-      //     },
-      //     body: JSON.stringify({ token }),
-      //     timeout: 10000, // 10 Seconds timeout
-      //   }
-      // );
       return await processOrdersReal(token);
-      // return await getMock(token);
-
-      // if (!response.ok) {
-      //   throw new Error("Failed to process orders");
-      // }
-
-      // return await response.json();
     } catch (error) {
       console.error("Error processing orders:", error);
       throw error;
@@ -140,23 +122,7 @@ export class ApiClient {
   async getPreviousCode(token: string): Promise<any> {
     try {
       console.log("getPreviousCode triggered");
-      // const response = await this.fetchWithTimeout(
-      //   `${this.apiUrl}/get_previous_code`,
-      //   {
-      //     method: "POST",
-      //     headers: {
-      //       "Content-Type": "application/json",
-      //     },
-      //     body: JSON.stringify({ token }),
-      //     timeout: 10000, // 10 Seconds timeout
-      //   }
-      // );
       return await getLastSupplyQrCode(token);
-      // if (!response.ok) {
-      //   throw new Error("Failed to get previous code");
-      // }
-
-      // return await response.json();
     } catch (error) {
       console.error("Error getting previous code:", error);
       throw error;

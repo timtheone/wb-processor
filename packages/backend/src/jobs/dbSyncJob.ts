@@ -1,7 +1,7 @@
 // Import the Cron library; make sure it's installed in your environment
 import { Cron } from "croner";
 import { performDbSync } from "../utils/performDbSync";
-import { getDbNamespaceAndNameMap, getDbs } from "../../db/getDbs";
+import { getDbNamespaceAndNameMap } from "../../db/getDbs";
 
 async function runTaskWithRetry2(maxRetries: number) {
   let attempts = 0;
@@ -39,7 +39,7 @@ async function runTaskWithRetry2(maxRetries: number) {
 }
 
 // Set up the Cron job in the worker
-new Cron("0 3 * * *", () => {
+new Cron("0 5 * * *", () => {
   runTaskWithRetry2(3);
 });
 
