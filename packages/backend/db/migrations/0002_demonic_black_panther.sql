@@ -1,0 +1,1 @@
+ALTER TABLE productCards ADD `ageGroup` text;

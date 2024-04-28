@@ -13,23 +13,31 @@ type Supply = {
 function simulateDelay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
-const WB_AP_URL = "https://suppliers-api.wildberries.ru/";
 const MAX_RETRIES = 10; // Maximum number of retries
 
-export async function addOrdersToSupplyReal(
+export const getLastTwoSupplyIds = async (token: string) => {
+  const lastSupply = await getLastSupply(token, true, 0);
+  const secondToLastSupply = await getLastSupply(token, true, 1);
+
+  return { lastSupply, secondToLastSupply };
+};
+
+async function addOrdersToSupplyReal(
   supplyId: string,
   orderIds: number[],
   token: string
 ): Promise<void> {
   const results = await Promise.all(
     orderIds.map((orderId) =>
-      fetch(`${WB_AP_URL}/api/v3/supplies/${supplyId}/orders/${orderId}`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `${token}`,
-        },
-      })
+      fetch(
+        `${Bun.env.WB_AP_URL}/api/v3/supplies/${supplyId}/orders/${orderId}`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `${token}`,
+          },
+        }
+      )
     )
   );
 
@@ -57,11 +65,12 @@ export async function addOrdersToSupplyReal(
 const getLastSupply = async (
   token: string,
   getDone = true,
+  offset = 1,
   next = 0,
   limit = 1000
 ): Promise<Supply | null> => {
   const response = await fetch(
-    `${WB_AP_URL}/api/v3/supplies?limit=${limit}&next=${next}`,
+    `${Bun.env.WB_AP_URL}/api/v3/supplies?limit=${limit}&next=${next}`,
     {
       headers: {
         Authorization: `${token}`,
@@ -70,6 +79,7 @@ const getLastSupply = async (
   );
 
   const jsonData = await response.json();
+
   let allSupplies: Supply[] = [];
 
   if (jsonData.supplies.length === limit) {
@@ -78,6 +88,7 @@ const getLastSupply = async (
     const restOfSupplies = await getLastSupply(
       token,
       getDone,
+      offset,
       jsonData.next,
       limit
     );
@@ -102,14 +113,14 @@ const getLastSupply = async (
   }
 
   // Return the last or second to last supply based on date
-  return getDone ? sortedSupplies[1] || null : sortedSupplies[0] || null;
+  return getDone ? sortedSupplies[offset] || null : sortedSupplies[0] || null;
 };
 
 export const getLastSupplyQrCode = async (token: string) => {
   const lastSupply = await getLastSupply(token);
 
   const barCode = await fetch(
-    `${WB_AP_URL}/api/v3/supplies/${lastSupply.id}/barcode?type=png`,
+    `${Bun.env.WB_AP_URL}/api/v3/supplies/${lastSupply.id}/barcode?type=png`,
     {
       headers: {
         Authorization: `${token}`,
@@ -129,7 +140,7 @@ export const processOrdersReal = async (token: string) => {
      Создаем поставку
    */
     const newDate = new Date();
-    supply = await fetch(`${WB_AP_URL}/api/v3/supplies`, {
+    supply = await fetch(`${Bun.env.WB_AP_URL}/api/v3/supplies`, {
       method: "POST",
       headers: {
         Authorization: `${token}`,
@@ -147,7 +158,7 @@ export const processOrdersReal = async (token: string) => {
   /*
       Получаем новые заказы
     */
-  const orders = await fetch(`${WB_AP_URL}/api/v3/orders/new`, {
+  const orders = await fetch(`${Bun.env.WB_AP_URL}/api/v3/orders/new`, {
     method: "GET",
     headers: {
       Authorization: `${token}`,
@@ -174,7 +185,7 @@ export const processOrdersReal = async (token: string) => {
   while (retryCountDelivery < MAX_RETRIES) {
     try {
       const deliverResponse = await fetch(
-        `${WB_AP_URL}/api/v3/supplies/${supply.id}/deliver`,
+        `${Bun.env.WB_AP_URL}/api/v3/supplies/${supply.id}/deliver`,
         {
           method: "PATCH",
           headers: {
@@ -219,7 +230,7 @@ export const processOrdersReal = async (token: string) => {
       console.log("retryCount", retryCount);
       if (localSupply.done) {
         const barCodeResponse = await fetch(
-          `${WB_AP_URL}/api/v3/supplies/${supply.id}/barcode?type=png`,
+          `${Bun.env.WB_AP_URL}/api/v3/supplies/${supply.id}/barcode?type=png`,
           {
             headers: {
               Authorization: `${token}`,
@@ -247,7 +258,7 @@ export const processOrdersReal = async (token: string) => {
 
 export const getMock = async (token: string) => {
   const barCode = await fetch(
-    `${WB_AP_URL}/api/v3/supplies/WB-GI-77468523/barcode?type=png`,
+    `${Bun.env.WB_AP_URL}/api/v3/supplies/WB-GI-77468523/barcode?type=png`,
     {
       headers: {
         Authorization: `${token}`,
@@ -259,11 +270,14 @@ export const getMock = async (token: string) => {
 };
 
 async function fetchSupplyData(supplyId: string, token: string) {
-  const response = await fetch(`${WB_AP_URL}/api/v3/supplies/${supplyId}`, {
-    headers: {
-      Authorization: `${token}`,
-    },
-  });
+  const response = await fetch(
+    `${Bun.env.WB_AP_URL}/api/v3/supplies/${supplyId}`,
+    {
+      headers: {
+        Authorization: `${token}`,
+      },
+    }
+  );
   if (response.status >= 200 && response.status < 300) {
     const supply = await response.json();
     return supply;

@@ -1,4 +1,9 @@
-import { getLastSupplyQrCode, getMock, processOrdersReal } from "./functions";
+import {
+  getLastSupplyQrCode,
+  getMock,
+  processOrdersReal,
+  getLastTwoSupplyIds,
+} from "./functions";
 
 export class ApiClient {
   private static instance: ApiClient;
@@ -39,27 +44,75 @@ export class ApiClient {
     }
   }
 
+  async getLastTwoSupplies(token: string): Promise<any> {
+    const { lastSupply, secondToLastSupply } = await getLastTwoSupplyIds(token);
+    return {
+      lastSupplyId: lastSupply?.id,
+      secondToLastSupplyId: secondToLastSupply?.id,
+    };
+  }
+
+  async getOrderListPdfCombinedShops(
+    list: "order" | "stickers",
+    shopsPayload: string
+  ): Promise<any> {
+    console.log("getOrderListPdfCombinedShops call initiated");
+    const response = await fetch(
+      `${this.apiUrl}/get-${list}-list-pdf-combined-shops`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/pdf",
+        },
+        body: shopsPayload,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to get order list pdf");
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+
+    const readable = Buffer.from(arrayBuffer);
+
+    return readable;
+  }
+
+  async syncDb(
+    token: string,
+    dbname: string,
+    telegramId: string
+  ): Promise<any> {
+    try {
+      const response = await fetch(`${this.apiUrl}/syncDB`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token,
+          dbname,
+          telegramId,
+        }),
+      });
+
+      console.log("response", response);
+
+      if (!response.ok) {
+        throw new Error("Failed to sync db");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error syncing db:", error);
+      throw error;
+    }
+  }
+
   async processOrders(token: string): Promise<any> {
     try {
-      // const response = await this.fetchWithTimeout(
-      //   `${this.apiUrl}/process-orders`,
-      //   {
-      //     method: "POST",
-      //     headers: {
-      //       "Content-Type": "application/json",
-      //     },
-      //     body: JSON.stringify({ token }),
-      //     timeout: 10000, // 10 Seconds timeout
-      //   }
-      // );
       return await processOrdersReal(token);
-      // return await getMock(token);
-
-      // if (!response.ok) {
-      //   throw new Error("Failed to process orders");
-      // }
-
-      // return await response.json();
     } catch (error) {
       console.error("Error processing orders:", error);
       throw error;
@@ -69,23 +122,7 @@ export class ApiClient {
   async getPreviousCode(token: string): Promise<any> {
     try {
       console.log("getPreviousCode triggered");
-      // const response = await this.fetchWithTimeout(
-      //   `${this.apiUrl}/get_previous_code`,
-      //   {
-      //     method: "POST",
-      //     headers: {
-      //       "Content-Type": "application/json",
-      //     },
-      //     body: JSON.stringify({ token }),
-      //     timeout: 10000, // 10 Seconds timeout
-      //   }
-      // );
       return await getLastSupplyQrCode(token);
-      // if (!response.ok) {
-      //   throw new Error("Failed to get previous code");
-      // }
-
-      // return await response.json();
     } catch (error) {
       console.error("Error getting previous code:", error);
       throw error;

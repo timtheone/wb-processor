@@ -7,7 +7,7 @@ import { simulateDelay } from "../src/utils/delay";
 
 export const createOrOpenDatabase = async (
   dbName: string,
-  telegramId: number
+  telegramId: string
 ) => {
   try {
     await readdir(`${import.meta.dir}/dbs/${telegramId}`);
