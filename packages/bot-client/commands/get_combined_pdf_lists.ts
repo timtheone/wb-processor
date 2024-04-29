@@ -45,7 +45,7 @@ export async function get_combined_pdf_lists(bot: Telegraf<MyContext<Update>>) {
       return {
         token: shop.token,
         dbname: shop.name,
-        telegramId: session.user!.telegramUserId!,
+        telegramId: session.user!.dbNameSpaceId!,
         supplyIds: supplyIdsPromisesResults.find(
           (result) => result.shopName === shop.name
         )?.supplyIds,
