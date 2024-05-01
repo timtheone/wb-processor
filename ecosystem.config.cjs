@@ -14,7 +14,7 @@ module.exports = {
             "cwd": "./packages/backend",
             "script": "./src/index.tsx",
             "interpreter": "bun",
-            // "exp_backoff_restart_delay": 100,
+            "exp_backoff_restart_delay": 150,
             "time": true,
             "log_date_format": "YYYY-MM-DD HH:mm Z"
         }
