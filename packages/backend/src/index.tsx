@@ -343,6 +343,7 @@ const createOrderListForShopsCombinedPdf = async ({
 
     // return htmlContent;
   } else {
+    console.log("backend stickers generation started");
     const stickers = flattenedSortedResponses
       .map((response) => {
         if (!response.stickers) {
