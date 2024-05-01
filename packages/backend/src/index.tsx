@@ -295,6 +295,11 @@ const createOrderListForShopsCombinedPdf = async ({
     }
   });
 
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+
   if (file === "orderList") {
     const htmlContent = (
       <ViewCombined
@@ -311,11 +316,6 @@ const createOrderListForShopsCombinedPdf = async ({
           .flat()}
       />
     );
-
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
 
     try {
       const page = await browser.newPage();
