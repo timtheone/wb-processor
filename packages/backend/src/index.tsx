@@ -372,6 +372,7 @@ const createOrderListForShopsCombinedPdf = async ({
 
       return stickersHtmlBuffer;
     } catch (error) {
+      console.error("error", error);
       throw new Error("Failed to create stickers PDF");
     } finally {
       await browser.close();
