@@ -15,6 +15,7 @@ module.exports = {
             "script": "./src/index.tsx",
             "interpreter": "bun",
             "exp_backoff_restart_delay": 150,
+            "cron_restart": '0 5 * * *',
             "time": true,
             "log_date_format": "YYYY-MM-DD HH:mm Z"
         }

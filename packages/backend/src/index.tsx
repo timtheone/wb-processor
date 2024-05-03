@@ -356,9 +356,7 @@ const createOrderListForShopsCombinedPdf = async ({
       .flat();
 
     const stickersHtml = <Stickers data={stickers} />;
-    const browser = await puppeteer.launch({
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+
     try {
       const pageStickers = await browser.newPage();
       await pageStickers.setContent(stickersHtml.toString(), {
@@ -436,5 +434,7 @@ app.post("/syncDB", async (c) => {
 });
 
 new Worker(new URL("./jobs/dbSyncJob.ts", import.meta.url).href);
+
+console.log("Server started at", new Date().toISOString());
 
 export default app;

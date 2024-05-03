@@ -39,7 +39,7 @@ async function runTaskWithRetry2(maxRetries: number) {
 }
 
 // Set up the Cron job in the worker
-new Cron("0 5 * * *", () => {
+new Cron("0 4 * * *", () => {
   runTaskWithRetry2(3);
 });
 
