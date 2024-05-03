@@ -11,6 +11,42 @@ import { ViewCombined } from "./pdfCreator/ViewCombined";
 import { Stickers } from "./pdfCreator/Stickers";
 import { performDbSync } from "./utils/performDbSync";
 
+let browserInstance = null;
+
+async function getBrowserInstance() {
+  if (browserInstance === null || !(await isBrowserOpen(browserInstance))) {
+    browserInstance = await puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+
+    const pid = await browserInstance.process()?.pid;
+    console.log(`Browser instance created with pid: ${pid}`);
+  }
+  return browserInstance;
+}
+
+async function isBrowserOpen(browser) {
+  try {
+    const version = await browser.version();
+    return Boolean(version);
+  } catch (e) {
+    return false;
+  }
+}
+
+async function closeBrowserInstance() {
+  if (browserInstance !== null) {
+    await browserInstance.close();
+    browserInstance = null;
+  }
+}
+
+async function shutdown() {
+  console.log("Shutting down browser instance");
+  await closeBrowserInstance();
+}
+
 const app = new Hono();
 
 app.use(
@@ -295,10 +331,7 @@ const createOrderListForShopsCombinedPdf = async ({
     }
   });
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  const browser = await getBrowserInstance();
 
   if (file === "orderList") {
     const htmlContent = (
@@ -338,7 +371,7 @@ const createOrderListForShopsCombinedPdf = async ({
     } catch (error) {
       throw new Error("Failed to create PDF");
     } finally {
-      await browser.close();
+      await shutdown();
     }
 
     // return htmlContent;
@@ -355,11 +388,14 @@ const createOrderListForShopsCombinedPdf = async ({
       })
       .flat();
 
+    console.log("stickers length", stickers.length);
+
     const stickersHtml = <Stickers data={stickers} />;
 
     try {
       const pageStickers = await browser.newPage();
       await pageStickers.setContent(stickersHtml.toString(), {
+        timeout: 0,
         waitUntil: "networkidle0",
       });
       console.log("setting content finished");
@@ -375,7 +411,7 @@ const createOrderListForShopsCombinedPdf = async ({
       console.error("error", error);
       throw new Error("Failed to create stickers PDF");
     } finally {
-      await browser.close();
+      await shutdown();
     }
     // return stickersHtml;
   }
