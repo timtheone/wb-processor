@@ -84,15 +84,30 @@ const getLastSupply = async (
 
   if (jsonData.supplies.length === limit) {
     // Return the result of the recursive call
-    allSupplies = [...allSupplies, ...jsonData.supplies];
-    const restOfSupplies = await getLastSupply(
-      token,
-      getDone,
-      offset,
-      jsonData.next,
-      limit
+
+    const response = await fetch(
+      `${Bun.env.WB_AP_URL}/api/v3/supplies?limit=${limit}&next=${jsonData.next}`,
+      {
+        headers: {
+          Authorization: `${token}`,
+        },
+      }
     );
-    return restOfSupplies ? restOfSupplies : null;
+
+    const jsonDataPreCheck = await response.json();
+
+    if (jsonDataPreCheck.supplies.length === 0) {
+      allSupplies = [...allSupplies, ...jsonData.supplies];
+    } else {
+      const restOfSupplies = await getLastSupply(
+        token,
+        getDone,
+        offset,
+        jsonData.next,
+        limit
+      );
+      return restOfSupplies ? restOfSupplies : null;
+    }
   } else {
     allSupplies = [...allSupplies, ...jsonData.supplies];
   }
@@ -132,6 +147,25 @@ export const getLastSupplyQrCode = async (token: string) => {
 };
 
 export const processOrdersReal = async (token: string) => {
+  /*
+      Получаем новые заказы
+    */
+  const orders = await fetch(`${Bun.env.WB_AP_URL}/api/v3/orders/new`, {
+    method: "GET",
+    headers: {
+      Authorization: `${token}`,
+    },
+  }).then((data) => data.json());
+
+  if (orders?.orders?.length < 1) {
+    return {
+      status: "no_orders",
+      reason: "Процесс отменен, так как нет новых заказов",
+    };
+  }
+
+  const ordersIds = orders?.orders?.map((order: any) => order.id);
+
   const lastNotDoneSupply = await getLastSupply(token, false);
   let supply;
 
@@ -155,18 +189,6 @@ export const processOrdersReal = async (token: string) => {
   }
 
   await simulateDelay(2000);
-  /*
-      Получаем новые заказы
-    */
-  const orders = await fetch(`${Bun.env.WB_AP_URL}/api/v3/orders/new`, {
-    method: "GET",
-    headers: {
-      Authorization: `${token}`,
-    },
-  }).then((data) => data.json());
-
-  const ordersIds = orders.orders.map((order: any) => order.id);
-
   //   /*
   //     Добавляем заказы к поставке
   //   */
