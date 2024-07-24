@@ -67,7 +67,7 @@ export class ApiClient {
         body: shopsPayload,
       }
     );
-
+    console.log("getOrderListPdfCombinedShops response", response.status);
     if (!response.ok) {
       throw new Error("Failed to get order list pdf");
     }

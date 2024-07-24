@@ -61,6 +61,8 @@ export async function get_combined_pdf_lists(bot: Telegraf<MyContext<Update>>) {
       apiPayload
     );
 
+    console.log("orderListPdf", orderListPdf.length);
+
     let messageId;
     let messageId2;
     const newDate = new Date();
