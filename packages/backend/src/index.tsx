@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { simulateDelay } from "./utils/delay";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { extractFromBody } from "../utils/extractTokenFromBody";
 import { productCards } from "../db/schema";
@@ -331,8 +331,6 @@ const createOrderListForShopsCombinedPdf = async ({
     }
   });
 
-  const browser = await getBrowserInstance();
-
   if (file === "orderList") {
     const htmlContent = (
       <ViewCombined
@@ -351,6 +349,7 @@ const createOrderListForShopsCombinedPdf = async ({
     );
 
     try {
+      const browser = await getBrowserInstance();
       const page = await browser.newPage();
       await page.setContent(htmlContent.toString(), {
         waitUntil: "networkidle0",
@@ -388,11 +387,12 @@ const createOrderListForShopsCombinedPdf = async ({
       })
       .flat();
 
-    console.log("stickers length", stickers.length);
+    // console.log("stickers length", stickers.length);
 
     const stickersHtml = <Stickers data={stickers} />;
 
     try {
+      const browser = await getBrowserInstance();
       const pageStickers = await browser.newPage();
       await pageStickers.setContent(stickersHtml.toString(), {
         timeout: 0,
@@ -417,36 +417,56 @@ const createOrderListForShopsCombinedPdf = async ({
   }
 };
 
-app.post("/get-order-list-pdf-combined-shops", async (c) => {
-  const shops: ShopsPayload[] = await extractFromBody(c.req, "shops");
+app.post(
+  "/get-order-list-pdf-combined-shops",
+  bodyLimit({
+    maxSize: 1024 * 1024 * 200, // 50kb
+    onError: (c) => {
+      return c.text("overflow :(", 413);
+    },
+  }),
+  async (c) => {
+    const shops: ShopsPayload[] = await extractFromBody(c.req, "shops");
 
-  const flattenedData: OrdersOfSupplyOfShopsEnriched[] =
-    await getCombinedOrderAndStickerList(shops);
+    console.log("shops request", shops);
 
-  const fileBuffer = await createOrderListForShopsCombinedPdf({
-    data: flattenedData,
-    file: "orderList",
-  });
+    const flattenedData: OrdersOfSupplyOfShopsEnriched[] =
+      await getCombinedOrderAndStickerList(shops);
 
-  return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
-  // return c.html(fileBuffer);
-});
+    const fileBuffer = await createOrderListForShopsCombinedPdf({
+      data: flattenedData,
+      file: "orderList",
+    });
 
-app.post("/get-stickers-list-pdf-combined-shops", async (c) => {
-  console.log("get-stickers-list-pdf-combined-shops calling");
-  const shops: ShopsPayload[] = await extractFromBody(c.req, "shops");
+    return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
+    // return c.html(fileBuffer);
+  }
+);
 
-  const flattenedData: OrdersOfSupplyOfShopsEnriched[] =
-    await getCombinedOrderAndStickerList(shops);
+app.post(
+  "/get-stickers-list-pdf-combined-shops",
+  bodyLimit({
+    maxSize: 1024 * 1024 * 200, // 50kb
+    onError: (c) => {
+      return c.text("overflow :(", 413);
+    },
+  }),
+  async (c) => {
+    console.log("get-stickers-list-pdf-combined-shops calling");
+    const shops: ShopsPayload[] = await extractFromBody(c.req, "shops");
 
-  const fileBuffer = await createOrderListForShopsCombinedPdf({
-    data: flattenedData,
-    file: "stickers",
-  });
+    const flattenedData: OrdersOfSupplyOfShopsEnriched[] =
+      await getCombinedOrderAndStickerList(shops);
 
-  return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
-  // return c.html(fileBuffer);
-});
+    const fileBuffer = await createOrderListForShopsCombinedPdf({
+      data: flattenedData,
+      file: "stickers",
+    });
+
+    return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
+    // return c.html(fileBuffer);
+  }
+);
 
 app.post("/syncDB", async (c) => {
   const token = await extractFromBody(c.req, "token");
