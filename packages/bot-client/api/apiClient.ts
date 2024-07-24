@@ -67,7 +67,6 @@ export class ApiClient {
         body: shopsPayload,
       }
     );
-    console.log("getOrderListPdfCombinedShops response", response.status);
     if (!response.ok) {
       throw new Error("Failed to get order list pdf");
     }
@@ -96,8 +95,6 @@ export class ApiClient {
           telegramId,
         }),
       });
-
-      console.log("response", response);
 
       if (!response.ok) {
         throw new Error("Failed to sync db");

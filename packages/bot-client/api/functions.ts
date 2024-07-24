@@ -55,8 +55,6 @@ async function addOrdersToSupplyReal(
     (result) => result.status >= 200 && result.status < 300
   );
 
-  console.log("All successful:", new Date());
-
   if (!allSuccessful) {
     throw new Error("Failed to add order to supply");
   }

@@ -102,8 +102,6 @@ export async function performDbSync(
       innerTokenValue = tokenTest[0].token;
     }
 
-    // console.log("innerTokenValue", innerTokenValue);
-
     const cards = await getProductCards({
       token: innerTokenValue,
       limit: 100,
@@ -115,7 +113,7 @@ export async function performDbSync(
         vendorCode: card.vendorCode,
         brand: card.brand,
         title: card.title,
-        img: card.photos[0].big,
+        img: card.photos[0].c246x328,
         ageGroup: card.characteristics?.find((characteristic) => {
           return characteristic.id === 73245;
         })?.value[0],

@@ -449,8 +449,6 @@ app.post(
       file: "orderList",
     });
 
-    console.log("fileBufer", fileBuffer.length);
-
     return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
     // return c.html(fileBuffer);
   }
