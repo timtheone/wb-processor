@@ -56,6 +56,17 @@ app.use(
   })
 );
 
+app.use(async (c, next) => {
+  const contentLength = c.req.header("content-length");
+  if (contentLength) {
+    const sizeInBytes = parseInt(contentLength, 10);
+    const sizeInMegabytes = sizeInBytes / (1024 * 1024); // Convert bytes to MB
+    console.log(`Request size: ${sizeInMegabytes.toFixed(2)} MB`);
+    console.log(`Raw request size: ${sizeInBytes} bytes`);
+  }
+  await next();
+});
+
 app.get("/", (c) => {
   return c.text("Hello Hono!");
 });
