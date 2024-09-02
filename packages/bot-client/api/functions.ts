@@ -76,7 +76,11 @@ const getLastSupply = async (
     }
   );
 
+  console.log("getLastSupply response", response);
+
   const jsonData = await response.json();
+
+  console.log("getLastSupply jsonData", jsonData);
 
   let allSupplies: Supply[] = [];
 
