@@ -116,6 +116,7 @@ async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
     const allStickers = [];
 
     for (const batch of batches) {
+      batch;
       const response = await fetch(
         `${Bun.env.WB_AP_URL}/api/v3/orders/stickers?type=svg&width=58&height=40`,
         {
@@ -134,6 +135,7 @@ async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
         console.error(
           `Failed to fetch stickers for batch: ${response.status} ${response.statusText}`
         );
+        console.error(`Failed order ids: ${batch.join(", ")}`);
         continue; // Skip this batch or handle error appropriately
       }
 
