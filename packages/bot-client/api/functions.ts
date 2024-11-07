@@ -116,6 +116,8 @@ const getLastSupply = async (
     getDone ? supply.done : !supply.done
   );
 
+  console.log("filteredSupplies", filteredSupplies.length);
+
   // Sort supplies by date
   const sortedSupplies = filteredSupplies.sort((a, b) => {
     const dateA = getDone ? new Date(a.closedAt) : new Date(a.createdAt);
