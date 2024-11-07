@@ -57,6 +57,7 @@ export class ApiClient {
     shopsPayload: string
   ): Promise<any> {
     console.log("getOrderListPdfCombinedShops call initiated");
+    console.log("payload", shopsPayload);
     const response = await fetch(
       `${this.apiUrl}/get-${list}-list-pdf-combined-shops`,
       {

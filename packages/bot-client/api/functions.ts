@@ -80,8 +80,6 @@ const getLastSupply = async (
 
   const jsonData = await response.json();
 
-  console.log("getLastSupply jsonData", jsonData);
-
   let allSupplies: Supply[] = [];
 
   if (jsonData.supplies.length === limit) {
