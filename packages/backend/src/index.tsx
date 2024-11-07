@@ -381,6 +381,7 @@ const createOrderListForShopsCombinedPdf = async ({
 
       return pdfBuffer;
     } catch (error) {
+      console.error("error", error);
       throw new Error("Failed to create PDF");
     } finally {
       await shutdown();
