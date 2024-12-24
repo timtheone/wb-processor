@@ -17,7 +17,18 @@ async function getBrowserInstance() {
   if (browserInstance === null || !(await isBrowserOpen(browserInstance))) {
     browserInstance = await puppeteer.launch({
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-session-crashed-bubble',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--noerrdialogs',
+        '--disable-gpu'
+      ],
     });
 
     const pid = await browserInstance.process()?.pid;
