@@ -418,14 +418,18 @@ const createOrderListForShopsCombinedPdf = async ({
     try {
       const browser = await getBrowserInstance();
       const pageStickers = await browser.newPage();
+
+      await pageStickers.setJavaScriptEnabled(false); // If you don't need JS
+
       await pageStickers.setContent(stickersHtml.toString(), {
-        timeout: 120000, // Set explicit timeout of 2 minutes instead of 0
-        waitUntil: "networkidle0",
+        timeout: 300000, // Set explicit timeout of 2 minutes instead of 0
+        waitUntil: "domcontentloaded",
       });
       console.log("setting content finished");
       const stickersHtmlBuffer = await pageStickers.pdf({
         width: "1.57in",
         height: "1.18in",
+        timeout: 300000,
       });
 
       console.log("pdf created");
