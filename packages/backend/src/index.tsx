@@ -18,16 +18,13 @@ async function getBrowserInstance() {
     browserInstance = await puppeteer.launch({
       headless: true,
       args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-session-crashed-bubble',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--noerrdialogs',
-        '--disable-gpu'
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-software-rasterizer",
+        "--disable-extensions",
+        "--no-zygote",
       ],
     });
 
@@ -390,6 +387,8 @@ const createOrderListForShopsCombinedPdf = async ({
         },
       });
 
+      await page.close();
+
       return pdfBuffer;
     } catch (error) {
       console.error("error", error);
@@ -420,7 +419,7 @@ const createOrderListForShopsCombinedPdf = async ({
       const browser = await getBrowserInstance();
       const pageStickers = await browser.newPage();
       await pageStickers.setContent(stickersHtml.toString(), {
-        timeout: 0,
+        timeout: 120000, // Set explicit timeout of 2 minutes instead of 0
         waitUntil: "networkidle0",
       });
       console.log("setting content finished");
@@ -430,6 +429,8 @@ const createOrderListForShopsCombinedPdf = async ({
       });
 
       console.log("pdf created");
+
+      await pageStickers.close();
 
       return stickersHtmlBuffer;
     } catch (error) {
