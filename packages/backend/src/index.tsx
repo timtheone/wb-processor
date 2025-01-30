@@ -126,7 +126,7 @@ async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
     for (const batch of batches) {
       batch;
       const response = await fetch(
-        `${Bun.env.WB_AP_URL}/api/v3/orders/stickers?type=svg&width=58&height=40`,
+        `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/orders/stickers?type=svg&width=58&height=40`,
         {
           method: "POST",
           headers: {
@@ -162,7 +162,7 @@ async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
         shop.supplyIds.map(async (id) => {
           // Fetch orders for each supply ID
           const response = await fetch(
-            `${Bun.env.WB_AP_URL}/api/v3/supplies/${id}/orders`,
+            `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${id}/orders`,
             {
               headers: {
                 Authorization: `${shop.token}`,
@@ -244,7 +244,7 @@ const getProductCards = async ({
   };
 
   const response = await fetch(
-    `${Bun.env.WB_AP_URL}/content/v2/get/cards/list`,
+    `${Bun.env.WB_API_URL_CONTENT}/content/v2/get/cards/list`,
     {
       headers: {
         Authorization: token,

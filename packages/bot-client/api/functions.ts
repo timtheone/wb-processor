@@ -30,7 +30,7 @@ async function addOrdersToSupplyReal(
   const results = await Promise.all(
     orderIds.map((orderId) =>
       fetch(
-        `${Bun.env.WB_AP_URL}/api/v3/supplies/${supplyId}/orders/${orderId}`,
+        `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}/orders/${orderId}`,
         {
           method: "PATCH",
           headers: {
@@ -68,7 +68,7 @@ const getLastSupply = async (
   limit = 1000
 ): Promise<Supply | null> => {
   const response = await fetch(
-    `${Bun.env.WB_AP_URL}/api/v3/supplies?limit=${limit}&next=${next}`,
+    `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies?limit=${limit}&next=${next}`,
     {
       headers: {
         Authorization: `${token}`,
@@ -86,7 +86,7 @@ const getLastSupply = async (
     // Return the result of the recursive call
 
     const response = await fetch(
-      `${Bun.env.WB_AP_URL}/api/v3/supplies?limit=${limit}&next=${jsonData.next}`,
+      `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies?limit=${limit}&next=${jsonData.next}`,
       {
         headers: {
           Authorization: `${token}`,
@@ -137,7 +137,7 @@ export const getLastSupplyQrCode = async (token: string) => {
   const lastSupply = await getLastSupply(token);
 
   const barCode = await fetch(
-    `${Bun.env.WB_AP_URL}/api/v3/supplies/${lastSupply.id}/barcode?type=png`,
+    `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${lastSupply.id}/barcode?type=png`,
     {
       headers: {
         Authorization: `${token}`,
@@ -152,12 +152,15 @@ export const processOrdersReal = async (token: string) => {
   /*
       Получаем новые заказы
     */
-  const orders = await fetch(`${Bun.env.WB_AP_URL}/api/v3/orders/new`, {
-    method: "GET",
-    headers: {
-      Authorization: `${token}`,
-    },
-  }).then((data) => data.json());
+  const orders = await fetch(
+    `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/orders/new`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `${token}`,
+      },
+    }
+  ).then((data) => data.json());
 
   if (orders?.orders?.length < 1) {
     return {
@@ -176,7 +179,7 @@ export const processOrdersReal = async (token: string) => {
      Создаем поставку
    */
     const newDate = new Date();
-    supply = await fetch(`${Bun.env.WB_AP_URL}/api/v3/supplies`, {
+    supply = await fetch(`${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies`, {
       method: "POST",
       headers: {
         Authorization: `${token}`,
@@ -209,7 +212,7 @@ export const processOrdersReal = async (token: string) => {
   while (retryCountDelivery < MAX_RETRIES) {
     try {
       const deliverResponse = await fetch(
-        `${Bun.env.WB_AP_URL}/api/v3/supplies/${supply.id}/deliver`,
+        `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supply.id}/deliver`,
         {
           method: "PATCH",
           headers: {
@@ -254,7 +257,7 @@ export const processOrdersReal = async (token: string) => {
       console.log("retryCount", retryCount);
       if (localSupply.done) {
         const barCodeResponse = await fetch(
-          `${Bun.env.WB_AP_URL}/api/v3/supplies/${supply.id}/barcode?type=png`,
+          `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supply.id}/barcode?type=png`,
           {
             headers: {
               Authorization: `${token}`,
@@ -282,7 +285,7 @@ export const processOrdersReal = async (token: string) => {
 
 export const getMock = async (token: string) => {
   const barCode = await fetch(
-    `${Bun.env.WB_AP_URL}/api/v3/supplies/WB-GI-77468523/barcode?type=png`,
+    `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/WB-GI-77468523/barcode?type=png`,
     {
       headers: {
         Authorization: `${token}`,
@@ -295,7 +298,7 @@ export const getMock = async (token: string) => {
 
 async function fetchSupplyData(supplyId: string, token: string) {
   const response = await fetch(
-    `${Bun.env.WB_AP_URL}/api/v3/supplies/${supplyId}`,
+    `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}`,
     {
       headers: {
         Authorization: `${token}`,

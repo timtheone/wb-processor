@@ -38,7 +38,7 @@ const getProductCards = async ({
   };
 
   const response = await fetch(
-    `${Bun.env.WB_AP_URL}/content/v2/get/cards/list`,
+    `${Bun.env.WB_API_URL_MARKETPLACE}/content/v2/get/cards/list`,
     {
       headers: {
         Authorization: token,
