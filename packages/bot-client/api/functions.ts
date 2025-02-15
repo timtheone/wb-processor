@@ -27,36 +27,78 @@ async function addOrdersToSupplyReal(
   orderIds: number[],
   token: string
 ): Promise<void> {
-  const results = await Promise.all(
-    orderIds.map((orderId) =>
-      fetch(
-        `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}/orders/${orderId}`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `${token}`,
-          },
-        }
+  try {
+    const results = await Promise.allSettled(
+      orderIds.map((orderId) =>
+        fetch(
+          `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}/orders/${orderId}`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `${token}`,
+            },
+          }
+        ).then(async (response) => {
+          // Capture response body for error cases
+          const responseBody =
+            response.status !== 200 ? await response.text() : null;
+          return { response, orderId, responseBody };
+        })
       )
-    )
-  );
+    );
 
-  results.forEach((result, index) => {
-    if (result.status < 200 && result.status > 300) {
-      console.error(
-        `Failed to add order ${
-          orderIds[index]
-        } to supply ${supplyId} at ${new Date()}`
+    const errors: any[] = [];
+
+    results.forEach((result) => {
+      if (result.status === "rejected") {
+        errors.push({
+          type: "fetch_error",
+          error: result.reason,
+          timestamp: new Date().toISOString(),
+        });
+      } else if (
+        result.value.response.status < 200 ||
+        result.value.response.status >= 300
+      ) {
+        errors.push({
+          type: "api_error",
+          orderId: result.value.orderId,
+          status: result.value.response.status,
+          statusText: result.value.response.statusText,
+          responseBody: result.value.responseBody,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
+
+    if (errors.length > 0) {
+      console.error("Errors occurred while adding orders to supply:", {
+        supplyId,
+        orderIds,
+        errors,
+        totalOrders: orderIds.length,
+        failedOrders: errors.length,
+        successfulOrders: orderIds.length - errors.length,
+      });
+      throw new Error(
+        `Failed to add orders to supply. ${errors.length} orders failed.`
       );
     }
-  });
-
-  const allSuccessful = results.every(
-    (result) => result.status >= 200 && result.status < 300
-  );
-
-  if (!allSuccessful) {
-    throw new Error("Failed to add order to supply");
+  } catch (error) {
+    console.error("Fatal error in addOrdersToSupplyReal:", {
+      supplyId,
+      orderIds,
+      error:
+        error instanceof Error
+          ? {
+              message: error.message,
+              stack: error.stack,
+              name: error.name,
+            }
+          : error,
+      timestamp: new Date().toISOString(),
+    });
+    throw error;
   }
 }
 
@@ -76,7 +118,7 @@ const getLastSupply = async (
     }
   );
 
-  console.log("getLastSupply response", response);
+  // console.log("getLastSupply response", response);
 
   const jsonData = await response.json();
 
@@ -186,7 +228,7 @@ export const processOrdersReal = async (token: string) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        name: formatDate(newDate),
+        name: "ТЕСТОВАЯ ПОСТАВКА, НЕ ОТПРАВАЛЯТЬ В ДОСТАВКУ",
       }),
     }).then((data) => data.json());
   } else {
@@ -200,87 +242,87 @@ export const processOrdersReal = async (token: string) => {
   console.log("Orders to add to supply started at:", new Date());
   await addOrdersToSupplyReal(supply.id, ordersIds, token);
 
-  console.log("Orders added to supply ended at:", new Date());
+  // console.log("Orders added to supply ended at:", new Date());
 
-  await simulateDelay(2000);
+  // await simulateDelay(2000);
 
-  console.log("Supply are getting send to delivery start at ", new Date());
-  //   // Put to delivery
+  // console.log("Supply are getting send to delivery start at ", new Date());
+  // //   // Put to delivery
 
-  let retryCountDelivery = 0;
+  // let retryCountDelivery = 0;
 
-  while (retryCountDelivery < MAX_RETRIES) {
-    try {
-      const deliverResponse = await fetch(
-        `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supply.id}/deliver`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `${token}`,
-          },
-        }
-      );
+  // while (retryCountDelivery < MAX_RETRIES) {
+  //   try {
+  //     const deliverResponse = await fetch(
+  //       `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supply.id}/deliver`,
+  //       {
+  //         method: "PATCH",
+  //         headers: {
+  //           Authorization: `${token}`,
+  //         },
+  //       }
+  //     );
 
-      const json = await deliverResponse.json();
+  //     const json = await deliverResponse.json();
 
-      console.log(`Deliver response on try ${retryCountDelivery}`, {
-        status: deliverResponse.status,
-        statusText: deliverResponse.statusText,
-        json: json,
-        supplyId: supply.id,
-      });
+  //     console.log(`Deliver response on try ${retryCountDelivery}`, {
+  //       status: deliverResponse.status,
+  //       statusText: deliverResponse.statusText,
+  //       json: json,
+  //       supplyId: supply.id,
+  //     });
 
-      if (deliverResponse.status >= 200 && deliverResponse.status < 300) {
-        break; // Exit the loop in case of success
-      } else {
-        retryCountDelivery++;
-        console.log(
-          `Retry #${retryCountDelivery}: Delivery not successful, retrying...`
-        );
-        await sleep(1000);
-      }
-    } catch (error) {
-      console.error("Error sending the supply to deliver", error);
-      break; // Exit the loop in case of an error
-    }
-  }
+  //     if (deliverResponse.status >= 200 && deliverResponse.status < 300) {
+  //       break; // Exit the loop in case of success
+  //     } else {
+  //       retryCountDelivery++;
+  //       console.log(
+  //         `Retry #${retryCountDelivery}: Delivery not successful, retrying...`
+  //       );
+  //       await sleep(1000);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error sending the supply to deliver", error);
+  //     break; // Exit the loop in case of an error
+  //   }
+  // }
 
-  console.log("Supply are getting send to delivery end at ", new Date());
+  // console.log("Supply are getting send to delivery end at ", new Date());
 
-  await simulateDelay(1000);
+  // await simulateDelay(1000);
 
-  let retryCount = 0;
+  // let retryCount = 0;
 
-  while (retryCount < MAX_RETRIES) {
-    try {
-      let localSupply = await fetchSupplyData(supply.id, token);
-      console.log("retryCount", retryCount);
-      if (localSupply.done) {
-        const barCodeResponse = await fetch(
-          `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supply.id}/barcode?type=png`,
-          {
-            headers: {
-              Authorization: `${token}`,
-            },
-          }
-        );
-        const barCode = await barCodeResponse.json();
-        return barCode; // Successfully fetched barcode, return it
-      } else {
-        // supply.done is false, increase retryCount and try again
-        retryCount++;
-        console.log(`Retry #${retryCount}: Supply not ready, retrying...`);
-        await sleep(1000);
-      }
-    } catch (error) {
-      console.error("Error fetching supply or barcode:", error);
-      break; // Exit the loop in case of an error
-    }
-  }
+  // while (retryCount < MAX_RETRIES) {
+  //   try {
+  //     let localSupply = await fetchSupplyData(supply.id, token);
+  //     console.log("retryCount", retryCount);
+  //     if (localSupply.done) {
+  //       const barCodeResponse = await fetch(
+  //         `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supply.id}/barcode?type=png`,
+  //         {
+  //           headers: {
+  //             Authorization: `${token}`,
+  //           },
+  //         }
+  //       );
+  //       const barCode = await barCodeResponse.json();
+  //       return barCode; // Successfully fetched barcode, return it
+  //     } else {
+  //       // supply.done is false, increase retryCount and try again
+  //       retryCount++;
+  //       console.log(`Retry #${retryCount}: Supply not ready, retrying...`);
+  //       await sleep(1000);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching supply or barcode:", error);
+  //     break; // Exit the loop in case of an error
+  //   }
+  // }
 
-  if (retryCount === MAX_RETRIES) {
-    console.error("Max retries reached without success.");
-  }
+  // if (retryCount === MAX_RETRIES) {
+  //   console.error("Max retries reached without success.");
+  // }
 };
 
 export const getMock = async (token: string) => {
