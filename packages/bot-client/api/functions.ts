@@ -1,4 +1,5 @@
 import { formatDate } from "../utils/formatDate";
+import { marketplaceTracker } from "../../backend/src/utils/request-tracker";
 
 type Supply = {
   closedAt: string;
@@ -29,8 +30,9 @@ async function addOrdersToSupplyReal(
 ): Promise<void> {
   try {
     const results = await Promise.allSettled(
-      orderIds.map((orderId) =>
-        fetch(
+      orderIds.map((orderId) => {
+        marketplaceTracker.trackRequest();
+        return fetch(
           `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}/orders/${orderId}`,
           {
             method: "PATCH",
@@ -53,6 +55,7 @@ async function addOrdersToSupplyReal(
     );
 
     const errors: any[] = [];
+    const requestsInLastMinute = marketplaceTracker.getRequestsInWindow();
 
     results.forEach((result) => {
       if (result.status === "rejected") {
@@ -60,6 +63,7 @@ async function addOrdersToSupplyReal(
           type: "fetch_error",
           error: result.reason,
           timestamp: new Date().toISOString(),
+          requestsInLastMinute,
         });
       } else if (
         result.value.response.status < 200 ||
@@ -72,6 +76,7 @@ async function addOrdersToSupplyReal(
           statusText: result.value.response.statusText,
           responseBody: result.value.responseBody,
           timestamp: new Date().toISOString(),
+          requestsInLastMinute,
         });
       }
     });
@@ -84,12 +89,14 @@ async function addOrdersToSupplyReal(
         totalOrders: orderIds.length,
         failedOrders: errors.length,
         successfulOrders: orderIds.length - errors.length,
+        requestsInLastMinute,
       });
       throw new Error(
         `Failed to add orders to supply. ${errors.length} orders failed.`
       );
     }
   } catch (error) {
+    const requestsInLastMinute = marketplaceTracker.getRequestsInWindow();
     console.error("Fatal error in addOrdersToSupplyReal:", {
       supplyId,
       orderIds,
@@ -102,6 +109,7 @@ async function addOrdersToSupplyReal(
             }
           : error,
       timestamp: new Date().toISOString(),
+      requestsInLastMinute,
     });
     throw error;
   }
@@ -114,6 +122,7 @@ const getLastSupply = async (
   next = 0,
   limit = 1000
 ): Promise<Supply | null> => {
+  marketplaceTracker.trackRequest();
   const response = await fetch(
     `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies?limit=${limit}&next=${next}`,
     {
@@ -131,7 +140,7 @@ const getLastSupply = async (
 
   if (jsonData.supplies.length === limit) {
     // Return the result of the recursive call
-
+    marketplaceTracker.trackRequest();
     const response = await fetch(
       `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies?limit=${limit}&next=${jsonData.next}`,
       {
@@ -209,6 +218,8 @@ export const processOrdersReal = async (token: string) => {
     }
   ).then((data) => data.json());
 
+  marketplaceTracker.trackRequest();
+
   if (orders?.orders?.length < 1) {
     return {
       status: "no_orders",
@@ -236,6 +247,7 @@ export const processOrdersReal = async (token: string) => {
         name: formatDate(newDate),
       }),
     }).then((data) => data.json());
+    marketplaceTracker.trackRequest();
   } else {
     supply = lastNotDoneSupply;
   }
