@@ -1,6 +1,5 @@
 import { formatDate } from "../utils/formatDate";
-import { marketplaceTracker } from "../../backend/src/utils/request-tracker";
-
+import { trackedFetch } from "../../backend/src/utils/request-tracker";
 type Supply = {
   closedAt: string;
   scanDt: string;
@@ -31,7 +30,6 @@ async function addOrdersToSupplyReal(
   try {
     const results = await Promise.allSettled(
       orderIds.map((orderId) => {
-        marketplaceTracker.trackRequest();
         return fetch(
           `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}/orders/${orderId}`,
           {
@@ -42,20 +40,16 @@ async function addOrdersToSupplyReal(
           }
         ).then(async (response) => {
           // Capture response body for error cases
-          const responseBody =
-            response.status !== 200
-              ? await response.json()
-              : {
-                  status: response.status,
-                  statusText: response.statusText,
-                };
+          const responseBody = await response.json();
+          if (response.status < 200 || response.status >= 300) {
+            throw new Error(JSON.stringify(responseBody));
+          }
           return { response, orderId, responseBody };
         });
       })
     );
 
     const errors: any[] = [];
-    const requestsInLastMinute = marketplaceTracker.getRequestsInWindow();
 
     results.forEach((result) => {
       if (result.status === "rejected") {
@@ -63,20 +57,6 @@ async function addOrdersToSupplyReal(
           type: "fetch_error",
           error: result.reason,
           timestamp: new Date().toISOString(),
-          requestsInLastMinute,
-        });
-      } else if (
-        result.value.response.status < 200 ||
-        result.value.response.status >= 300
-      ) {
-        errors.push({
-          type: "api_error",
-          orderId: result.value.orderId,
-          status: result.value.response.status,
-          statusText: result.value.response.statusText,
-          responseBody: result.value.responseBody,
-          timestamp: new Date().toISOString(),
-          requestsInLastMinute,
         });
       }
     });
@@ -89,14 +69,12 @@ async function addOrdersToSupplyReal(
         totalOrders: orderIds.length,
         failedOrders: errors.length,
         successfulOrders: orderIds.length - errors.length,
-        requestsInLastMinute,
       });
       throw new Error(
         `Failed to add orders to supply. ${errors.length} orders failed.`
       );
     }
   } catch (error) {
-    const requestsInLastMinute = marketplaceTracker.getRequestsInWindow();
     console.error("Fatal error in addOrdersToSupplyReal:", {
       supplyId,
       orderIds,
@@ -109,7 +87,6 @@ async function addOrdersToSupplyReal(
             }
           : error,
       timestamp: new Date().toISOString(),
-      requestsInLastMinute,
     });
     throw error;
   }
@@ -122,8 +99,7 @@ const getLastSupply = async (
   next = 0,
   limit = 1000
 ): Promise<Supply | null> => {
-  marketplaceTracker.trackRequest();
-  const response = await fetch(
+  const response = await trackedFetch(
     `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies?limit=${limit}&next=${next}`,
     {
       headers: {
@@ -140,8 +116,7 @@ const getLastSupply = async (
 
   if (jsonData.supplies.length === limit) {
     // Return the result of the recursive call
-    marketplaceTracker.trackRequest();
-    const response = await fetch(
+    const response = await trackedFetch(
       `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies?limit=${limit}&next=${jsonData.next}`,
       {
         headers: {
@@ -208,7 +183,7 @@ export const processOrdersReal = async (token: string) => {
   /*
       Получаем новые заказы
     */
-  const orders = await fetch(
+  const orders = await trackedFetch(
     `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/orders/new`,
     {
       method: "GET",
@@ -217,8 +192,6 @@ export const processOrdersReal = async (token: string) => {
       },
     }
   ).then((data) => data.json());
-
-  marketplaceTracker.trackRequest();
 
   if (orders?.orders?.length < 1) {
     return {
@@ -229,6 +202,8 @@ export const processOrdersReal = async (token: string) => {
 
   const ordersIds = orders?.orders?.map((order: any) => order.id);
 
+  console.log("ordersIds", ordersIds);
+
   const lastNotDoneSupply = await getLastSupply(token, false);
   let supply;
 
@@ -237,17 +212,19 @@ export const processOrdersReal = async (token: string) => {
      Создаем поставку
    */
     const newDate = new Date();
-    supply = await fetch(`${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies`, {
-      method: "POST",
-      headers: {
-        Authorization: `${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: formatDate(newDate),
-      }),
-    }).then((data) => data.json());
-    marketplaceTracker.trackRequest();
+    supply = await trackedFetch(
+      `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formatDate(newDate),
+        }),
+      }
+    ).then((data) => data.json());
   } else {
     supply = lastNotDoneSupply;
   }
@@ -270,7 +247,7 @@ export const processOrdersReal = async (token: string) => {
 
   while (retryCountDelivery < MAX_RETRIES) {
     try {
-      const deliverResponse = await fetch(
+      const deliverResponse = await trackedFetch(
         `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supply.id}/deliver`,
         {
           method: "PATCH",
@@ -315,7 +292,7 @@ export const processOrdersReal = async (token: string) => {
       let localSupply = await fetchSupplyData(supply.id, token);
       console.log("retryCount", retryCount);
       if (localSupply.done) {
-        const barCodeResponse = await fetch(
+        const barCodeResponse = await trackedFetch(
           `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supply.id}/barcode?type=png`,
           {
             headers: {
@@ -356,7 +333,7 @@ export const getMock = async (token: string) => {
 };
 
 async function fetchSupplyData(supplyId: string, token: string) {
-  const response = await fetch(
+  const response = await trackedFetch(
     `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}`,
     {
       headers: {

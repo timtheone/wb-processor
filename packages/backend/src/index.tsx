@@ -3,7 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { extractFromBody } from "../utils/extractTokenFromBody";
 import { productCards } from "../db/schema";
-import { inArray, sql } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { createOrOpenDatabase } from "../db/createDb";
 import puppeteer from "puppeteer";
 

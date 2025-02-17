@@ -24,26 +24,6 @@ export class ApiClient {
     return ApiClient.instance;
   }
 
-  private async fetchWithTimeout(
-    resource: string,
-    options: RequestInit & { timeout?: number }
-  ) {
-    const { timeout = 10000 } = options;
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    try {
-      const response = await fetch(resource, {
-        ...options,
-        signal: controller.signal,
-      });
-      clearTimeout(id);
-      return response;
-    } catch (error) {
-      console.error("Error fetching resource:", error);
-      throw new Error("Network request failed");
-    }
-  }
-
   async getLastTwoSupplies(token: string): Promise<any> {
     const { lastSupply, secondToLastSupply } = await getLastTwoSupplyIds(token);
     return {
