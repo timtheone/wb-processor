@@ -50,8 +50,8 @@ async function addOrdersToSupplyReal(
                   statusText: response.statusText,
                 };
           return { response, orderId, responseBody };
-        })
-      )
+        });
+      })
     );
 
     const errors: any[] = [];
