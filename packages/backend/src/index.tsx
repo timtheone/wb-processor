@@ -10,6 +10,7 @@ import puppeteer from "puppeteer";
 import { ViewCombined } from "./pdfCreator/ViewCombined";
 import { Stickers } from "./pdfCreator/Stickers";
 import { performDbSync } from "./utils/performDbSync";
+import { trackedFetch } from "./utils/request-tracker";
 
 let browserInstance = null;
 
@@ -125,7 +126,7 @@ async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
 
     for (const batch of batches) {
       batch;
-      const response = await fetch(
+      const response = await trackedFetch(
         `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/orders/stickers?type=svg&width=58&height=40`,
         {
           method: "POST",
