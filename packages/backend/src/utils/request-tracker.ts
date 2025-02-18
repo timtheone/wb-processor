@@ -14,8 +14,11 @@ class WildberriesRequestTracker {
   private readonly logFilePath: string;
 
   constructor() {
-    // Create logs directory in project root
-    const logsDir = path.join(process.cwd(), "logs");
+    // Create logs directory in monorepo root by going up 3 levels from current file
+    const monoRepoRoot = path.join(process.cwd(), "..", "..");
+    console.log(monoRepoRoot);
+    const logsDir = path.join(monoRepoRoot, "logs");
+
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
