@@ -30,7 +30,7 @@ async function addOrdersToSupplyReal(
   try {
     const results = await Promise.allSettled(
       orderIds.map((orderId) => {
-        return fetch(
+        return trackedFetch(
           `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}/orders/${orderId}`,
           {
             method: "PATCH",
