@@ -26,44 +26,42 @@ async function addOrdersToSupplyReal(
   supplyId: string,
   orderIds: number[],
   token: string,
-  delayMs: number = 500 // Added default delay parameter
+  delayMs: number = 500
 ): Promise<void> {
   try {
-    // Process orders sequentially with delay
-    const results = await Promise.allSettled(
-      orderIds.map(
-        (orderId, index) =>
-          new Promise(async (resolve, reject) => {
-            try {
-              // Add delay before each request except the first one
-              if (index > 0) {
-                await new Promise((r) => setTimeout(r, delayMs));
-              }
+    // Process orders strictly sequentially with delay
+    const results = [];
+    for (const orderId of orderIds) {
+      try {
+        const response = await trackedFetch(
+          `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}/orders/${orderId}`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `${token}`,
+            },
+          }
+        );
 
-              const response = await trackedFetch(
-                `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}/orders/${orderId}`,
-                {
-                  method: "PATCH",
-                  headers: {
-                    Authorization: `${token}`,
-                  },
-                }
-              );
+        const responseBody = await response.json();
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(JSON.stringify(responseBody));
+        }
+        results.push({
+          status: "fulfilled",
+          value: { response, orderId, responseBody },
+        });
 
-              const responseBody = await response.json();
-              if (response.status < 200 || response.status >= 300) {
-                throw new Error(JSON.stringify(responseBody));
-              }
-              resolve({ response, orderId, responseBody });
-            } catch (error) {
-              reject(error);
-            }
-          })
-      )
-    );
+        // Add delay after each successful request (except the last one)
+        if (orderId !== orderIds[orderIds.length - 1]) {
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+      } catch (error) {
+        results.push({ status: "rejected", reason: error });
+      }
+    }
 
     const errors: any[] = [];
-
     results.forEach((result) => {
       if (result.status === "rejected") {
         errors.push({
