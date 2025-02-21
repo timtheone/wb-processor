@@ -25,28 +25,41 @@ export const getLastTwoSupplyIds = async (token: string) => {
 async function addOrdersToSupplyReal(
   supplyId: string,
   orderIds: number[],
-  token: string
+  token: string,
+  delayMs: number = 500 // Added default delay parameter
 ): Promise<void> {
   try {
+    // Process orders sequentially with delay
     const results = await Promise.allSettled(
-      orderIds.map((orderId) => {
-        return trackedFetch(
-          `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}/orders/${orderId}`,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization: `${token}`,
-            },
-          }
-        ).then(async (response) => {
-          // Capture response body for error cases
-          const responseBody = await response.json();
-          if (response.status < 200 || response.status >= 300) {
-            throw new Error(JSON.stringify(responseBody));
-          }
-          return { response, orderId, responseBody };
-        });
-      })
+      orderIds.map(
+        (orderId, index) =>
+          new Promise(async (resolve, reject) => {
+            try {
+              // Add delay before each request except the first one
+              if (index > 0) {
+                await new Promise((r) => setTimeout(r, delayMs));
+              }
+
+              const response = await trackedFetch(
+                `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}/orders/${orderId}`,
+                {
+                  method: "PATCH",
+                  headers: {
+                    Authorization: `${token}`,
+                  },
+                }
+              );
+
+              const responseBody = await response.json();
+              if (response.status < 200 || response.status >= 300) {
+                throw new Error(JSON.stringify(responseBody));
+              }
+              resolve({ response, orderId, responseBody });
+            } catch (error) {
+              reject(error);
+            }
+          })
+      )
     );
 
     const errors: any[] = [];
