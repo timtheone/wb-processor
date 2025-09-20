@@ -2,7 +2,8 @@
   "name": "backend",
   "scripts": {
     "dev": "bun run --hot src/index.tsx",
-    "start": "bun src/index.tsx"
+    "start": "bun src/index.tsx",
+    "update-token": "bun run scripts/updateToken.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.29.4",
