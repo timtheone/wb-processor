@@ -114,6 +114,10 @@ Bot.use(stage.middleware());
 //     command: "generate_pdfs",
 //     description: "Сгенерировать листы подбора и стикеры для всех магазинов",
 //   },
+//   {
+//     command: "generate_single_supply_pdf",
+//     description: "Сгенерировать листы для последней поставки",
+//   },
 // ]);
 
 // const test = existingChatSpecificCommands.filter(
@@ -132,6 +136,12 @@ Bot.use(stage.middleware());
 setupCommands(Bot);
 setupActions(Bot);
 
-Bot.launch();
+Bot.launch().then(() => {
+  console.log("Bot is running and ready to receive commands!");
+});
+
+// Enable graceful stop
+process.once("SIGINT", () => Bot.stop("SIGINT"));
+process.once("SIGTERM", () => Bot.stop("SIGTERM"));
 
 // 438143658

@@ -1,3 +1,4 @@
+/** @jsxImportSource hono/jsx */
 import { productCards } from "../../db/schema";
 
 export const ViewCombined = ({

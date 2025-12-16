@@ -32,6 +32,13 @@ export class ApiClient {
     };
   }
 
+  async getLastSupply(token: string): Promise<any> {
+    const { lastSupply } = await getLastTwoSupplyIds(token);
+    return {
+      lastSupplyId: lastSupply?.id,
+    };
+  }
+
   async getOrderListPdfCombinedShops(
     list: "order" | "stickers",
     shopsPayload: string

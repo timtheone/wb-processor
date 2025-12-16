@@ -1,3 +1,4 @@
+/** @jsxImportSource hono/jsx */
 export const Stickers = ({ data }) => {
   return (
     <html>
