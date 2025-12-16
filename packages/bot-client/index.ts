@@ -93,32 +93,34 @@ Bot.use(stage.middleware());
 //   },
 // });
 
-// await Bot.telegram.setMyCommands([
-//   {
-//     command: "shop",
-//     description: "управление магазинами",
-//   },
-//   {
-//     command: "process_all_shops",
-//     description: "Обработать заказы для всех магазинов",
-//   },
-//   {
-//     command: "quick_action",
-//     description: "Быстрые действия",
-//   },
-//   {
-//     command: "sync_content_shops",
-//     description: "Синхронизировать контент магазинов",
-//   },
-//   {
-//     command: "generate_pdfs",
-//     description: "Сгенерировать листы подбора и стикеры для всех магазинов",
-//   },
-//   {
-//     command: "generate_single_supply_pdf",
-//     description: "Сгенерировать листы для последней поставки",
-//   },
-// ]);
+/*
+await Bot.telegram.setMyCommands([
+  {
+    command: "shop",
+    description: "управление магазинами",
+  },
+  {
+    command: "process_all_shops",
+    description: "Обработать заказы для всех магазинов",
+  },
+  {
+    command: "quick_action",
+    description: "Быстрые действия",
+  },
+  {
+    command: "sync_content_shops",
+    description: "Синхронизировать контент магазинов",
+  },
+  {
+    command: "generate_pdfs",
+    description: "Сгенерировать листы подбора и стикеры для всех магазинов",
+  },
+  {
+    command: "generate_single_supply_pdf",
+    description: "Сгенерировать листы для последней поставки",
+  },
+]);
+*/
 
 // const test = existingChatSpecificCommands.filter(
 //   (command) => command.command == "shop"
