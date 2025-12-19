@@ -88,22 +88,8 @@ type ShopsPayload = {
 };
 
 type Order = {
-  user: string | null;
-  orderUid: string;
-  article: string;
-  rid: string;
-  createdAt: string;
-  offices: string[];
-  skus: string[];
-  id: string;
-  warehouseId: number;
+  id: number;
   nmId: number;
-  chrtId: number;
-  price: number;
-  convertedPrice: number;
-  currencyCode: number;
-  convertedCurrencyCode: number;
-  cargoType: number;
 };
 
 type OrdersOfSupplyOfShopsEnriched = {
@@ -159,31 +145,90 @@ async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
 
   await Promise.all(
     shops.map(async (shop) => {
+      // Fetch orders for the last 10 days with pagination
+      const dateFrom = Math.floor(Date.now() / 1000) - 10 * 24 * 60 * 60; // 10 days ago
+      const allOrders: any[] = [];
+      let nextCursor = 0;
+
+      // Keep fetching until we have all orders (pagination)
+      do {
+        const allOrdersResponse = await fetch(
+          `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/orders?limit=1000&next=${nextCursor}&dateFrom=${dateFrom}`,
+          {
+            headers: {
+              Authorization: `${shop.token}`,
+            },
+          }
+        );
+
+        if (!allOrdersResponse.ok) {
+          console.error(
+            `[Shop ${shop.dbname}] API Error ${allOrdersResponse.status}`
+          );
+          const errorData = await allOrdersResponse.json();
+          console.error(`[Shop ${shop.dbname}] Error details:`, errorData);
+          break;
+        }
+
+        const allOrdersData = await allOrdersResponse.json();
+        const orders = allOrdersData.orders || [];
+
+        if (orders.length > 0) {
+          allOrders.push(...orders);
+        }
+
+        // Check if there are more pages
+        nextCursor = allOrdersData.next;
+
+        // Break if no more pages or we got less than the limit
+        if (!nextCursor || orders.length < 1000) {
+          break;
+        }
+      } while (true);
+
+      // Create a map of orderId -> order data for quick lookup
+      const orderDetailsMap = new Map<number, { id: number; nmId: number }>(
+        allOrders.map((order: any) => [
+          order.id,
+          { id: order.id, nmId: order.nmId },
+        ])
+      );
+
       await Promise.all(
         shop.supplyIds.map(async (id) => {
-          // Fetch orders for each supply ID
+          // Fetch order IDs for this supply using the new endpoint
           const response = await fetch(
-            `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${id}/orders`,
+            `${Bun.env.WB_API_URL_MARKETPLACE}/api/marketplace/v3/supplies/${id}/order-ids`,
             {
               headers: {
                 Authorization: `${shop.token}`,
               },
             }
           );
-          const orders = await response.json();
-
-          // Get order IDs from the orders
-          const orderIds = orders.orders.map((order) => order.id);
+          const orderIdsData = await response.json();
+          const orderIds = orderIdsData.orderIds || [];
 
           // Fetch stickers for the orders
           const stickers = await fetchStickers(shop.token, orderIds);
 
-          // Enrich orders with stickers data
-          const enrichedOrders = orders.orders.map((order) => ({
-            ...order,
-            stickers:
-              stickers.find((sticker) => sticker.orderId === order.id) || null,
-          }));
+          // Enrich orders with stickers data and nmId from the full orders list
+          const enrichedOrders = orderIds
+            .map((orderId: number) => {
+              const orderDetails = orderDetailsMap.get(orderId);
+              if (!orderDetails) {
+                return null;
+              }
+              return {
+                id: orderDetails.id,
+                nmId: orderDetails.nmId,
+                stickers:
+                  stickers.find((sticker) => sticker.orderId === orderId) ||
+                  null,
+              };
+            })
+            .filter(
+              (order): order is Order & { stickers: any } => order !== null
+            ); // Remove null entries
 
           // Collect the enriched orders grouped by dbname
           const existingEntries = groupedOrders.get(shop.dbname) || [];
@@ -316,6 +361,12 @@ const createOrderListForShopsCombinedPdf = async ({
 
       // Extract unique itemIds from all orders within the current shop
       const uniqueItemIds = Array.from(ordersMap.keys());
+
+      // If no orders, return empty array
+      if (uniqueItemIds.length === 0) {
+        console.warn(`No orders found for shop ${dbname}`);
+        return Promise.resolve([]);
+      }
 
       // Perform database query for the extracted unique itemIds
       return db.query.productCards

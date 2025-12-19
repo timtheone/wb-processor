@@ -29,44 +29,91 @@ async function addOrdersToSupplyReal(
   delayMs: number = 500
 ): Promise<void> {
   try {
-    // Process orders strictly sequentially with delay
+    // Validate input: API requires at least 1 order (minItems: 1)
+    if (!orderIds || orderIds.length === 0) {
+      throw new Error("At least one order ID is required");
+    }
+
+    // Split orders into batches of 100 (API maxItems: 100)
+    const batchSize = 100;
+    const batches = [];
+    for (let i = 0; i < orderIds.length; i += batchSize) {
+      batches.push(orderIds.slice(i, i + batchSize));
+    }
+
     const results = [];
-    for (const orderId of orderIds) {
+
+    // Process each batch sequentially with delay
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+
       try {
         const response = await trackedFetch(
-          `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies/${supplyId}/orders/${orderId}`,
+          `${Bun.env.WB_API_URL_MARKETPLACE}/api/marketplace/v3/supplies/${supplyId}/orders`,
           {
             method: "PATCH",
             headers: {
               Authorization: `${token}`,
+              "Content-Type": "application/json",
             },
+            body: JSON.stringify({
+              orders: batch,
+            }),
           }
         );
 
-        const responseBody = await response.json();
-        if (response.status < 200 || response.status >= 300) {
-          throw new Error(JSON.stringify(responseBody));
+        // Success response is 204 (No Content)
+        // Error responses (400, 409, etc.) have JSON body with Error schema
+        if (response.status === 204) {
+          // Success - no response body expected
+          results.push({
+            status: "fulfilled",
+            value: { response, batch },
+          });
+        } else if (response.status >= 400) {
+          // Try to parse error response as JSON
+          let errorMessage: string;
+          try {
+            const errorBody = (await response.json()) as {
+              message?: string;
+              code?: string;
+            };
+            errorMessage =
+              errorBody.message || errorBody.code || JSON.stringify(errorBody);
+          } catch {
+            errorMessage = await response.text();
+          }
+          throw new Error(`HTTP ${response.status}: ${errorMessage}`);
+        } else {
+          // Unexpected status code
+          const responseText = await response.text();
+          throw new Error(
+            `Unexpected HTTP ${response.status}: ${responseText}`
+          );
         }
-        results.push({
-          status: "fulfilled",
-          value: { response, orderId, responseBody },
-        });
 
-        // Add delay after each successful request (except the last one)
-        if (orderId !== orderIds[orderIds.length - 1]) {
+        // Add delay between batches (except after the last one)
+        if (i < batches.length - 1) {
           await new Promise((r) => setTimeout(r, delayMs));
         }
       } catch (error) {
-        results.push({ status: "rejected", reason: error });
+        results.push({
+          status: "rejected",
+          reason: error,
+          batch,
+        });
       }
     }
 
     const errors: any[] = [];
+    let failedOrdersCount = 0;
     results.forEach((result) => {
       if (result.status === "rejected") {
+        failedOrdersCount += result.batch?.length || 0;
         errors.push({
           type: "fetch_error",
           error: result.reason,
+          batchSize: result.batch?.length || 0,
           timestamp: new Date().toISOString(),
         });
       }
@@ -75,20 +122,20 @@ async function addOrdersToSupplyReal(
     if (errors.length > 0) {
       console.error("Errors occurred while adding orders to supply:", {
         supplyId,
-        orderIds,
         errors,
         totalOrders: orderIds.length,
-        failedOrders: errors.length,
-        successfulOrders: orderIds.length - errors.length,
+        failedBatches: errors.length,
+        failedOrders: failedOrdersCount,
+        successfulOrders: orderIds.length - failedOrdersCount,
       });
       throw new Error(
-        `Failed to add orders to supply. ${errors.length} orders failed.`
+        `Failed to add orders to supply. ${errors.length} batch(es) failed, ${failedOrdersCount} orders affected.`
       );
     }
   } catch (error) {
     console.error("Fatal error in addOrdersToSupplyReal:", {
       supplyId,
-      orderIds,
+      totalOrders: orderIds.length,
       error:
         error instanceof Error
           ? {
