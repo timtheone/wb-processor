@@ -10,6 +10,7 @@ import { getQrCodesForAllShops } from "./get_previous_qr_codes_for_all_shops";
 import { sync_content_shops } from "./sync_content_db";
 import { get_combined_pdf_lists } from "./get_combined_pdf_lists";
 import { get_single_supply_pdf } from "./get_single_supply_pdf";
+import { get_waiting_orders_pdf } from "./get_waiting_orders_pdf";
 
 export const attachCommands = (
   bot: Telegraf<MyContext<Update>>,
@@ -31,5 +32,6 @@ export const setupCommands = (Bot: Telegraf<MyContext<Update>>) => {
     sync_content_shops,
     get_combined_pdf_lists,
     get_single_supply_pdf,
+    get_waiting_orders_pdf,
   ]);
 };

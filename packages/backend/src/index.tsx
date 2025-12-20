@@ -111,7 +111,6 @@ async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
     const allStickers = [];
 
     for (const batch of batches) {
-      batch;
       const response = await fetch(
         `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/orders/stickers?type=svg&width=58&height=40`,
         {
@@ -145,8 +144,9 @@ async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
 
   await Promise.all(
     shops.map(async (shop) => {
-      // Fetch orders for the last 10 days with pagination
-      const dateFrom = Math.floor(Date.now() / 1000) - 10 * 24 * 60 * 60; // 10 days ago
+      // Fetch orders for the last 5 days with pagination
+      // Reduced from 10 to 5 to avoid Telegram 413 errors with large PDFs
+      const dateFrom = Math.floor(Date.now() / 1000) - 5 * 24 * 60 * 60; // 5 days ago
       const allOrders: any[] = [];
       let nextCursor = 0;
 
@@ -251,6 +251,271 @@ async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
 
   const flattenedData: OrdersOfSupplyOfShopsEnriched[] =
     ordersOfSupplyOfShops.flat();
+
+  // Log total order count for monitoring
+  const totalOrders = flattenedData.reduce((sum, shop) => {
+    const shopData = Object.values(shop)[0];
+    if (Array.isArray(shopData)) {
+      return (
+        sum +
+        shopData.reduce((s, supply) => s + (supply.orders?.length || 0), 0)
+      );
+    }
+    return sum;
+  }, 0);
+
+  console.log(`Total orders fetched: ${totalOrders}`);
+
+  // Telegram has a file size limit, warn if we might exceed it
+  if (totalOrders > 500) {
+    console.warn(
+      `⚠️  Large order count (${totalOrders}). PDF might be too large for Telegram!`
+    );
+  }
+
+  return flattenedData;
+}
+
+async function getCombinedOrderAndStickerListWithStatusFilter(
+  shops: ShopsPayload[]
+) {
+  function chunkArray(array: number[], size: number) {
+    const chunked_arr = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunked_arr.push(array.slice(i, i + size));
+    }
+    return chunked_arr;
+  }
+
+  async function fetchStickers(token: string, orderIds: number[]) {
+    const batchSize = 100;
+    const batches = chunkArray(orderIds, batchSize);
+    const allStickers = [];
+
+    for (const batch of batches) {
+      const response = await fetch(
+        `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/orders/stickers?type=svg&width=58&height=40`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            orders: batch,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        console.error(
+          `Failed to fetch stickers for batch: ${response.status} ${response.statusText}`
+        );
+        console.error(`Failed order ids: ${batch.join(", ")}`);
+        continue;
+      }
+
+      const batchStickers = await response.json();
+      allStickers.push(...batchStickers.stickers);
+    }
+
+    return allStickers;
+  }
+
+  async function fetchOrderStatuses(token: string, orderIds: number[]) {
+    const batchSize = 1000;
+    const batches = chunkArray(orderIds, batchSize);
+    const allStatuses = [];
+
+    for (const batch of batches) {
+      const response = await fetch(
+        `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/orders/status`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            orders: batch,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        console.error(
+          `Failed to fetch order statuses for batch: ${response.status} ${response.statusText}`
+        );
+        console.error(`Failed order ids: ${batch.join(", ")}`);
+        continue;
+      }
+
+      const batchStatuses = await response.json();
+      allStatuses.push(...batchStatuses.orders);
+    }
+
+    return allStatuses;
+  }
+
+  const groupedOrders = new Map();
+
+  await Promise.all(
+    shops.map(async (shop) => {
+      // Fetch orders for the last 30 days with pagination
+      // Increased from 5 to 30 to ensure we get all orders from the last 6 supplies
+      const dateFrom = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60; // 30 days ago
+      const allOrders: any[] = [];
+      let nextCursor = 0;
+
+      // Keep fetching until we have all orders (pagination)
+      do {
+        const allOrdersResponse = await fetch(
+          `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/orders?limit=1000&next=${nextCursor}&dateFrom=${dateFrom}`,
+          {
+            headers: {
+              Authorization: `${shop.token}`,
+            },
+          }
+        );
+
+        if (!allOrdersResponse.ok) {
+          console.error(
+            `[Shop ${shop.dbname}] API Error ${allOrdersResponse.status}`
+          );
+          const errorData = await allOrdersResponse.json();
+          console.error(`[Shop ${shop.dbname}] Error details:`, errorData);
+          break;
+        }
+
+        const allOrdersData = await allOrdersResponse.json();
+        const orders = allOrdersData.orders || [];
+
+        if (orders.length > 0) {
+          allOrders.push(...orders);
+        }
+
+        nextCursor = allOrdersData.next;
+
+        if (!nextCursor || orders.length < 1000) {
+          break;
+        }
+      } while (true);
+
+      // Create a map of orderId -> order data for quick lookup (with createdAt for waiting orders)
+      const orderDetailsMap = new Map<
+        number,
+        { id: number; nmId: number; createdAt: string }
+      >(
+        allOrders.map((order: any) => [
+          order.id,
+          { id: order.id, nmId: order.nmId, createdAt: order.createdAt },
+        ])
+      );
+
+      await Promise.all(
+        shop.supplyIds.map(async (id) => {
+          // Fetch order IDs for this supply using the new endpoint
+          const response = await fetch(
+            `${Bun.env.WB_API_URL_MARKETPLACE}/api/marketplace/v3/supplies/${id}/order-ids`,
+            {
+              headers: {
+                Authorization: `${shop.token}`,
+              },
+            }
+          );
+          const orderIdsData = await response.json();
+          const orderIds = orderIdsData.orderIds || [];
+
+          // Fetch order statuses
+          const orderStatuses = await fetchOrderStatuses(shop.token, orderIds);
+
+          // Create a map of orderId -> wbStatus
+          const statusMap = new Map<number, string>(
+            orderStatuses.map((status: any) => [status.id, status.wbStatus])
+          );
+
+          // Filter orderIds to only include those with wbStatus === "waiting"
+          const waitingOrderIds = orderIds.filter((orderId: number) => {
+            const wbStatus = statusMap.get(orderId);
+            return wbStatus === "waiting";
+          });
+
+          console.log(
+            `[Shop ${shop.dbname}] Supply ${id}: ${orderIds.length} total orders, ${waitingOrderIds.length} waiting orders`
+          );
+
+          // If no waiting orders, skip this supply
+          if (waitingOrderIds.length === 0) {
+            return;
+          }
+
+          // Fetch stickers only for waiting orders
+          const stickers = await fetchStickers(shop.token, waitingOrderIds);
+
+          // Enrich orders with stickers data, nmId, and createdAt from the full orders list
+          const enrichedOrders = waitingOrderIds
+            .map((orderId: number) => {
+              const orderDetails = orderDetailsMap.get(orderId);
+              if (!orderDetails) {
+                console.warn(
+                  `[Shop ${shop.dbname}] Supply ${id}: Order ${orderId} not found in orderDetailsMap (might be older than 30 days)`
+                );
+                return null;
+              }
+              return {
+                id: orderDetails.id,
+                nmId: orderDetails.nmId,
+                createdAt: orderDetails.createdAt,
+                stickers:
+                  stickers.find((sticker) => sticker.orderId === orderId) ||
+                  null,
+              };
+            })
+            .filter(
+              (order): order is Order & { stickers: any; createdAt: string } =>
+                order !== null
+            );
+
+          console.log(
+            `[Shop ${shop.dbname}] Supply ${id}: ${waitingOrderIds.length} waiting orders, ${enrichedOrders.length} enriched successfully`
+          );
+
+          // Collect the enriched orders grouped by dbname
+          const existingEntries = groupedOrders.get(shop.dbname) || [];
+          existingEntries.push({
+            orders: enrichedOrders,
+            supplyId: id,
+            telegramId: shop.telegramId,
+          });
+          groupedOrders.set(shop.dbname, existingEntries);
+        })
+      );
+    })
+  );
+
+  const ordersOfSupplyOfShops = Array.from(groupedOrders).map(
+    ([key, value]) => ({
+      [key]: value,
+    })
+  );
+
+  const flattenedData: OrdersOfSupplyOfShopsEnriched[] =
+    ordersOfSupplyOfShops.flat();
+
+  // Log total order count for monitoring
+  const totalOrders = flattenedData.reduce((sum, shop) => {
+    const shopData = Object.values(shop)[0];
+    if (Array.isArray(shopData)) {
+      return (
+        sum +
+        shopData.reduce((s, supply) => s + (supply.orders?.length || 0), 0)
+      );
+    }
+    return sum;
+  }, 0);
+
+  console.log(`Total waiting orders fetched: ${totalOrders}`);
+
   return flattenedData;
 }
 
@@ -324,9 +589,11 @@ const getProductCards = async ({
 const createOrderListForShopsCombinedPdf = async ({
   data,
   file,
+  isWaitingOrdersOnly = false,
 }: {
   data: OrdersOfSupplyOfShopsEnriched[];
   file: "orderList" | "stickers";
+  isWaitingOrdersOnly?: boolean;
 }) => {
   console.log("pdf-generation started");
   const dbs = await Promise.all(
@@ -343,19 +610,21 @@ const createOrderListForShopsCombinedPdf = async ({
       const dbname = Object.keys(shopObject)[0];
       const db = dbs[index];
 
-      // Create nmId to multiple orders map
+      // Create nmId to multiple orders map (include createdAt for waiting orders PDF)
       const ordersMap = new Map();
       shopObject[dbname].forEach((shop) =>
-        shop.orders.forEach((order) => {
+        shop.orders.forEach((order: any) => {
           if (!ordersMap.has(order.nmId)) {
             ordersMap.set(order.nmId, []);
           }
           if (!order.stickers) {
             console.log("order", order);
           }
-          ordersMap
-            .get(order.nmId)
-            .push({ orderId: order.id, stickers: order.stickers });
+          ordersMap.get(order.nmId).push({
+            orderId: order.id,
+            stickers: order.stickers,
+            createdAt: order.createdAt, // Include createdAt for waiting orders
+          });
         })
       );
 
@@ -379,11 +648,12 @@ const createOrderListForShopsCombinedPdf = async ({
           products.forEach((product) => {
             const orders = ordersMap.get(product.id);
             if (orders) {
-              orders.forEach((order) => {
+              orders.forEach((order: any) => {
                 enrichedProducts.push({
                   ...product,
                   stickers: order.stickers,
                   orderId: order.orderId,
+                  createdAt: order.createdAt, // Include createdAt for waiting orders
                 });
               });
             }
@@ -413,11 +683,19 @@ const createOrderListForShopsCombinedPdf = async ({
             const dbname = Object.keys(shopObject)[0];
 
             // Extract itemIds from all orders within the current shop
-            return shopObject[dbname].flatMap(
-              (shop) => `${shop.supplyId} - ${shop.orders.length} Товаров`
+            return shopObject[dbname].flatMap((shop) =>
+              isWaitingOrdersOnly
+                ? `${shop.supplyId} - ${shop.orders.length} Товаров (ожидающие)`
+                : `${shop.supplyId} - ${shop.orders.length} Товаров`
             );
           })
           .flat()}
+        headerTitle={
+          isWaitingOrdersOnly
+            ? "Листы подбора (только ожидающие заказы):"
+            : "Листы подбора:"
+        }
+        isWaitingOrdersOnly={isWaitingOrdersOnly}
       />
     );
 
@@ -547,6 +825,57 @@ app.post(
 
     return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
     // return c.html(fileBuffer);
+  }
+);
+
+app.post(
+  "/get-waiting-order-list-pdf-combined-shops",
+  bodyLimit({
+    maxSize: 1024 * 1024 * 200,
+    onError: (c) => {
+      return c.text("overflow :(", 413);
+    },
+  }),
+  async (c) => {
+    const shops: ShopsPayload[] = await extractFromBody(c.req, "shops");
+
+    console.log("shops request for waiting orders", shops);
+
+    const flattenedData: OrdersOfSupplyOfShopsEnriched[] =
+      await getCombinedOrderAndStickerListWithStatusFilter(shops);
+
+    const fileBuffer = await createOrderListForShopsCombinedPdf({
+      data: flattenedData,
+      file: "orderList",
+      isWaitingOrdersOnly: true,
+    });
+
+    return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
+  }
+);
+
+app.post(
+  "/get-waiting-stickers-list-pdf-combined-shops",
+  bodyLimit({
+    maxSize: 1024 * 1024 * 200,
+    onError: (c) => {
+      return c.text("overflow :(", 413);
+    },
+  }),
+  async (c) => {
+    console.log("get-waiting-stickers-list-pdf-combined-shops calling");
+    const shops: ShopsPayload[] = await extractFromBody(c.req, "shops");
+
+    const flattenedData: OrdersOfSupplyOfShopsEnriched[] =
+      await getCombinedOrderAndStickerListWithStatusFilter(shops);
+
+    const fileBuffer = await createOrderListForShopsCombinedPdf({
+      data: flattenedData,
+      file: "stickers",
+      isWaitingOrdersOnly: true,
+    });
+
+    return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
   }
 );
 

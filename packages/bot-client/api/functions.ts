@@ -15,11 +15,76 @@ function simulateDelay(ms: number) {
 }
 const MAX_RETRIES = 10; // Maximum number of retries
 
+/**
+ * Fetches all supplies from the API with pagination, filters by done status, and sorts by date
+ * @param token - Wildberries API token
+ * @param getDone - If true, fetch completed supplies; if false, fetch active supplies
+ * @returns Sorted array of supplies (most recent first)
+ */
+const fetchAndSortAllSupplies = async (
+  token: string,
+  getDone = true
+): Promise<Supply[]> => {
+  const fetchSuppliesRecursive = async (
+    next = 0,
+    limit = 1000
+  ): Promise<Supply[]> => {
+    const response = await trackedFetch(
+      `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies?limit=${limit}&next=${next}`,
+      {
+        headers: {
+          Authorization: `${token}`,
+        },
+      }
+    );
+
+    const jsonData: any = await response.json();
+    let allSupplies: Supply[] = [...jsonData.supplies];
+
+    // If we got a full page, there might be more data
+    if (jsonData.supplies.length === limit && jsonData.next) {
+      // Recursively fetch the rest
+      const moreSupplies = await fetchSuppliesRecursive(jsonData.next, limit);
+      allSupplies = [...allSupplies, ...moreSupplies];
+    }
+
+    return allSupplies;
+  };
+
+  // Fetch all supplies
+  const allSupplies = await fetchSuppliesRecursive();
+
+  // Filter by done status
+  const filteredSupplies = allSupplies.filter((supply) =>
+    getDone ? supply.done : !supply.done
+  );
+
+  // Sort by date (most recent first)
+  const sortedSupplies = filteredSupplies.sort((a, b) => {
+    const dateA = getDone ? new Date(a.closedAt) : new Date(a.createdAt);
+    const dateB = getDone ? new Date(b.closedAt) : new Date(b.createdAt);
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  return sortedSupplies;
+};
+
 export const getLastTwoSupplyIds = async (token: string) => {
-  const lastSupply = await getLastSupply(token, true, 0);
-  const secondToLastSupply = await getLastSupply(token, true, 1);
+  const sortedSupplies = await fetchAndSortAllSupplies(token, true);
+  const lastSupply = sortedSupplies[0] || null;
+  const secondToLastSupply = sortedSupplies[1] || null;
 
   return { lastSupply, secondToLastSupply };
+};
+
+export const getLastSixSuppliesExcludingNewest = async (
+  token: string
+): Promise<string[]> => {
+  const sortedSupplies = await fetchAndSortAllSupplies(token, true);
+
+  // Get supplies at indices 1-6 (skipping index 0 which is the newest)
+  // and extract their IDs
+  return sortedSupplies.slice(1, 7).map((supply) => supply.id);
 };
 
 async function addOrdersToSupplyReal(
@@ -153,73 +218,18 @@ async function addOrdersToSupplyReal(
 const getLastSupply = async (
   token: string,
   getDone = true,
-  offset = 1,
-  next = 0,
-  limit = 1000
+  offset = 0
 ): Promise<Supply | null> => {
-  const response = await trackedFetch(
-    `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies?limit=${limit}&next=${next}`,
-    {
-      headers: {
-        Authorization: `${token}`,
-      },
-    }
-  );
+  const sortedSupplies = await fetchAndSortAllSupplies(token, getDone);
 
-  // console.log("getLastSupply response", response);
-
-  const jsonData = await response.json();
-
-  let allSupplies: Supply[] = [];
-
-  if (jsonData.supplies.length === limit) {
-    // Return the result of the recursive call
-    const response = await trackedFetch(
-      `${Bun.env.WB_API_URL_MARKETPLACE}/api/v3/supplies?limit=${limit}&next=${jsonData.next}`,
-      {
-        headers: {
-          Authorization: `${token}`,
-        },
-      }
-    );
-
-    const jsonDataPreCheck = await response.json();
-
-    if (jsonDataPreCheck.supplies.length === 0) {
-      allSupplies = [...allSupplies, ...jsonData.supplies];
-    } else {
-      const restOfSupplies = await getLastSupply(
-        token,
-        getDone,
-        offset,
-        jsonData.next,
-        limit
-      );
-      return restOfSupplies ? restOfSupplies : null;
-    }
-  } else {
-    allSupplies = [...allSupplies, ...jsonData.supplies];
-  }
-
-  const filteredSupplies = allSupplies.filter((supply) =>
-    getDone ? supply.done : !supply.done
-  );
-
-  console.log("filteredSupplies", filteredSupplies.length);
-
-  // Sort supplies by date
-  const sortedSupplies = filteredSupplies.sort((a, b) => {
-    const dateA = getDone ? new Date(a.closedAt) : new Date(a.createdAt);
-    const dateB = getDone ? new Date(b.closedAt) : new Date(b.createdAt);
-    return dateB.getTime() - dateA.getTime();
-  });
+  console.log("filteredSupplies", sortedSupplies.length);
 
   if (sortedSupplies.length === 0) {
     return null;
   }
 
-  // Return the last or second to last supply based on date
-  return getDone ? sortedSupplies[offset] || null : sortedSupplies[0] || null;
+  // Return the supply at the specified offset
+  return sortedSupplies[offset] || null;
 };
 
 export const getLastSupplyQrCode = async (token: string) => {

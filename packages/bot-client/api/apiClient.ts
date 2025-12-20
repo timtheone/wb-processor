@@ -1,8 +1,8 @@
 import {
   getLastSupplyQrCode,
-  getMock,
   processOrdersReal,
   getLastTwoSupplyIds,
+  getLastSixSuppliesExcludingNewest,
 } from "./functions";
 
 export class ApiClient {
@@ -39,6 +39,13 @@ export class ApiClient {
     };
   }
 
+  async getLastSixSupplies(token: string): Promise<any> {
+    const supplyIds = await getLastSixSuppliesExcludingNewest(token);
+    return {
+      supplyIds,
+    };
+  }
+
   async getOrderListPdfCombinedShops(
     list: "order" | "stickers",
     shopsPayload: string
@@ -57,6 +64,33 @@ export class ApiClient {
     );
     if (!response.ok) {
       throw new Error("Failed to get order list pdf");
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+
+    const readable = Buffer.from(arrayBuffer);
+
+    return readable;
+  }
+
+  async getWaitingOrderListPdfCombinedShops(
+    list: "order" | "stickers",
+    shopsPayload: string
+  ): Promise<any> {
+    console.log("getWaitingOrderListPdfCombinedShops call initiated");
+    console.log("payload", shopsPayload);
+    const response = await fetch(
+      `${this.apiUrl}/get-waiting-${list}-list-pdf-combined-shops`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/pdf",
+        },
+        body: shopsPayload,
+      }
+    );
+    if (!response.ok) {
+      throw new Error("Failed to get waiting order list pdf");
     }
 
     const arrayBuffer = await response.arrayBuffer();

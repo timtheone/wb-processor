@@ -4,9 +4,17 @@ import { productCards } from "../../db/schema";
 export const ViewCombined = ({
   data,
   supplyIds,
+  headerTitle = "Листы подбора:",
+  isWaitingOrdersOnly = false,
 }: {
-  data: (typeof productCards.$inferSelect)[];
+  data: (typeof productCards.$inferSelect & {
+    createdAt?: string;
+    orderId?: number;
+    stickers?: any;
+  })[];
   supplyIds: string[];
+  headerTitle?: string;
+  isWaitingOrdersOnly?: boolean;
 }) => {
   const css = `
 
@@ -51,7 +59,7 @@ export const ViewCombined = ({
         }}
       >
         <div>
-          <p>Листы подбора:</p>
+          <p>{headerTitle}</p>
           <ul>
             {supplyIds.map((supplyId) => (
               <li>
@@ -77,7 +85,7 @@ export const ViewCombined = ({
                 <th class="tdAndTh">Фото</th>
                 <th class="tdAndTh">Бренд</th>
                 <th class="tdAndTh">Наименование</th>
-                <th class="tdAndTh">ВГ</th>
+                <th class="tdAndTh">{isWaitingOrdersOnly ? "Создан" : "ВГ"}</th>
                 <th class="tdAndTh" style={{ padding: "8px" }}>
                   Арт.WB
                 </th>
@@ -87,11 +95,18 @@ export const ViewCombined = ({
                 <tr key={item.id}>
                   <td class="tdAndTh">{item.orderId}</td>
                   <td class="tdAndTh" style={{ textAlign: "center" }}>
-                    <img style={{ width: "90px" }} src={item.img} />
+                    <img style={{ width: "90px" }} src={item.img || ""} />
                   </td>
                   <td class="tdAndTh">{item.brand}</td>
                   <td class="tdAndTh">{item.title}</td>
-                  <td class="tdAndTh">{item.ageGroup}</td>
+                  <td class="tdAndTh">
+                    {isWaitingOrdersOnly && item.createdAt
+                      ? new Date(item.createdAt).toLocaleDateString("ru-RU", {
+                          day: "2-digit",
+                          month: "2-digit",
+                        })
+                      : item.ageGroup}
+                  </td>
                   <td class="tdAndTh" style={{ padding: "8px" }}>
                     {item.id}
                   </td>
