@@ -18,6 +18,7 @@ async function getBrowserInstance() {
   if (browserInstance === null || !(await isBrowserOpen(browserInstance))) {
     browserInstance = await puppeteer.launch({
       headless: true,
+      protocolTimeout: 600000, // 10 minutes for large PDFs
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -704,6 +705,7 @@ const createOrderListForShopsCombinedPdf = async ({
       const page = await browser.newPage();
       await page.setContent(htmlContent.toString(), {
         waitUntil: "networkidle0",
+        timeout: 600000, // 10 minutes for large PDFs
       });
 
       const pdfBuffer = await page.pdf({
@@ -715,7 +717,31 @@ const createOrderListForShopsCombinedPdf = async ({
           left: "3mm",
           right: "5mm",
         },
+        timeout: 600000, // 10 minutes for large PDFs
       });
+
+      // Check file size (Telegram limit is 50MB)
+      const fileSizeInMB = pdfBuffer.length / (1024 * 1024);
+      console.log(`Order list PDF size: ${fileSizeInMB.toFixed(2)} MB`);
+
+      if (fileSizeInMB > 50) {
+        console.error(
+          `⚠️  PDF size (${fileSizeInMB.toFixed(
+            2
+          )} MB) exceeds Telegram's 50MB limit!`
+        );
+        throw new Error(
+          `PDF size (${fileSizeInMB.toFixed(
+            2
+          )} MB) exceeds Telegram's 50MB limit. Please reduce the number of orders.`
+        );
+      } else if (fileSizeInMB > 45) {
+        console.warn(
+          `⚠️  PDF size (${fileSizeInMB.toFixed(
+            2
+          )} MB) is close to Telegram's 50MB limit!`
+        );
+      }
 
       await page.close();
 
@@ -752,17 +778,40 @@ const createOrderListForShopsCombinedPdf = async ({
       await pageStickers.setJavaScriptEnabled(false); // If you don't need JS
 
       await pageStickers.setContent(stickersHtml.toString(), {
-        timeout: 300000, // Set explicit timeout of 2 minutes instead of 0
+        timeout: 600000, // Set explicit timeout of 10 minutes for large PDFs
         waitUntil: "domcontentloaded",
       });
       console.log("setting content finished");
       const stickersHtmlBuffer = await pageStickers.pdf({
         width: "1.57in",
         height: "1.18in",
-        timeout: 300000,
+        timeout: 600000, // Increased to 10 minutes
       });
 
       console.log("pdf created");
+
+      // Check file size (Telegram limit is 50MB)
+      const fileSizeInMB = stickersHtmlBuffer.length / (1024 * 1024);
+      console.log(`Stickers PDF size: ${fileSizeInMB.toFixed(2)} MB`);
+
+      if (fileSizeInMB > 50) {
+        console.error(
+          `⚠️  PDF size (${fileSizeInMB.toFixed(
+            2
+          )} MB) exceeds Telegram's 50MB limit!`
+        );
+        throw new Error(
+          `PDF size (${fileSizeInMB.toFixed(
+            2
+          )} MB) exceeds Telegram's 50MB limit. Please reduce the number of orders.`
+        );
+      } else if (fileSizeInMB > 45) {
+        console.warn(
+          `⚠️  PDF size (${fileSizeInMB.toFixed(
+            2
+          )} MB) is close to Telegram's 50MB limit!`
+        );
+      }
 
       await pageStickers.close();
 
