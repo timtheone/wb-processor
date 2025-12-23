@@ -7,6 +7,7 @@ import { productCards } from "../db/schema";
 import { inArray } from "drizzle-orm";
 import { createOrOpenDatabase } from "../db/createDb";
 import puppeteer from "puppeteer";
+import { PDFDocument } from "pdf-lib";
 
 import { ViewCombined } from "./pdfCreator/ViewCombined";
 import { Stickers } from "./pdfCreator/Stickers";
@@ -14,24 +15,43 @@ import { performDbSync } from "./utils/performDbSync";
 
 let browserInstance = null;
 
-async function getBrowserInstance() {
+async function getBrowserInstance(useAggressiveMemoryOptimization = false) {
   if (browserInstance === null || !(await isBrowserOpen(browserInstance))) {
+    const baseArgs = [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-gpu",
+      "--disable-dev-shm-usage",
+      "--disable-software-rasterizer",
+      "--disable-extensions",
+      "--no-zygote",
+    ];
+
+    // Add aggressive memory optimization flags only for stickers generation
+    const memoryOptimizationArgs = useAggressiveMemoryOptimization
+      ? [
+          "--disable-web-security",
+          "--disable-features=IsolateOrigins,site-per-process",
+          "--disable-blink-features=AutomationControlled",
+          "--js-flags=--max-old-space-size=512", // Limit V8 memory to 512MB
+          "--disable-images", // Don't load external images (we use inline base64 anyway)
+          "--disable-css-variables", // Reduce CSS processing
+          "--single-process", // Use single process mode to reduce overhead
+        ]
+      : [];
+
     browserInstance = await puppeteer.launch({
       headless: true,
       protocolTimeout: 600000, // 10 minutes for large PDFs
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
-        "--disable-software-rasterizer",
-        "--disable-extensions",
-        "--no-zygote",
-      ],
+      args: [...baseArgs, ...memoryOptimizationArgs],
     });
 
     const pid = await browserInstance.process()?.pid;
-    console.log(`Browser instance created with pid: ${pid}`);
+    console.log(
+      `Browser instance created with pid: ${pid}${
+        useAggressiveMemoryOptimization ? " (memory optimized)" : ""
+      }`
+    );
   }
   return browserInstance;
 }
@@ -166,8 +186,25 @@ async function getCombinedOrderAndStickerList(shops: ShopsPayload[]) {
           console.error(
             `[Shop ${shop.dbname}] API Error ${allOrdersResponse.status}`
           );
-          const errorData = await allOrdersResponse.json();
-          console.error(`[Shop ${shop.dbname}] Error details:`, errorData);
+
+          // Get error details - read as text first, then try to parse as JSON
+          try {
+            const errorText = await allOrdersResponse.text();
+            try {
+              const errorData = JSON.parse(errorText);
+              console.error(`[Shop ${shop.dbname}] Error details:`, errorData);
+            } catch {
+              // Not JSON, log as text
+              console.error(
+                `[Shop ${shop.dbname}] Error response:`,
+                errorText.substring(0, 200)
+              );
+            }
+          } catch (_readError) {
+            console.error(
+              `[Shop ${shop.dbname}] Could not read error response`
+            );
+          }
           break;
         }
 
@@ -383,8 +420,25 @@ async function getCombinedOrderAndStickerListWithStatusFilter(
           console.error(
             `[Shop ${shop.dbname}] API Error ${allOrdersResponse.status}`
           );
-          const errorData = await allOrdersResponse.json();
-          console.error(`[Shop ${shop.dbname}] Error details:`, errorData);
+
+          // Get error details - read as text first, then try to parse as JSON
+          try {
+            const errorText = await allOrdersResponse.text();
+            try {
+              const errorData = JSON.parse(errorText);
+              console.error(`[Shop ${shop.dbname}] Error details:`, errorData);
+            } catch {
+              // Not JSON, log as text
+              console.error(
+                `[Shop ${shop.dbname}] Error response:`,
+                errorText.substring(0, 200)
+              );
+            }
+          } catch (_readError) {
+            console.error(
+              `[Shop ${shop.dbname}] Could not read error response`
+            );
+          }
           break;
         }
 
@@ -767,62 +821,174 @@ const createOrderListForShopsCombinedPdf = async ({
       })
       .flat();
 
-    // console.log("stickers length", stickers.length);
+    console.log(`Total stickers to generate: ${stickers.length}`);
 
-    const stickersHtml = <Stickers data={stickers} />;
+    const STICKER_BATCH_THRESHOLD = 300; // Only use batching for >300 stickers
+    const useBatching = stickers.length > STICKER_BATCH_THRESHOLD;
 
-    try {
-      const browser = await getBrowserInstance();
-      const pageStickers = await browser.newPage();
+    if (useBatching) {
+      console.log(
+        `Large sticker count (${stickers.length}), using batch rendering...`
+      );
 
-      await pageStickers.setJavaScriptEnabled(false); // If you don't need JS
-
-      await pageStickers.setContent(stickersHtml.toString(), {
-        timeout: 600000, // Set explicit timeout of 10 minutes for large PDFs
-        waitUntil: "domcontentloaded",
-      });
-      console.log("setting content finished");
-      const stickersHtmlBuffer = await pageStickers.pdf({
-        width: "1.57in",
-        height: "1.18in",
-        timeout: 600000, // Increased to 10 minutes
-      });
-
-      console.log("pdf created");
-
-      // Check file size (Telegram limit is 50MB)
-      const fileSizeInMB = stickersHtmlBuffer.length / (1024 * 1024);
-      console.log(`Stickers PDF size: ${fileSizeInMB.toFixed(2)} MB`);
-
-      if (fileSizeInMB > 50) {
-        console.error(
-          `⚠️  PDF size (${fileSizeInMB.toFixed(
-            2
-          )} MB) exceeds Telegram's 50MB limit!`
-        );
-        throw new Error(
-          `PDF size (${fileSizeInMB.toFixed(
-            2
-          )} MB) exceeds Telegram's 50MB limit. Please reduce the number of orders.`
-        );
-      } else if (fileSizeInMB > 45) {
-        console.warn(
-          `⚠️  PDF size (${fileSizeInMB.toFixed(
-            2
-          )} MB) is close to Telegram's 50MB limit!`
-        );
+      // Batch rendering to reduce memory usage
+      const BATCH_SIZE = 50; // Process 50 stickers at a time
+      const batches = [];
+      for (let i = 0; i < stickers.length; i += BATCH_SIZE) {
+        batches.push(stickers.slice(i, i + BATCH_SIZE));
       }
 
-      await pageStickers.close();
+      console.log(
+        `Rendering in ${batches.length} batches of up to ${BATCH_SIZE} stickers each`
+      );
 
-      return stickersHtmlBuffer;
-    } catch (error) {
-      console.error("error", error);
-      throw new Error("Failed to create stickers PDF");
-    } finally {
-      await shutdown();
+      try {
+        const browser = await getBrowserInstance(true); // Use aggressive memory optimization for stickers
+        const pdfBuffers = [];
+
+        // Render each batch separately
+        for (let i = 0; i < batches.length; i++) {
+          const batch = batches[i];
+          console.log(
+            `Rendering batch ${i + 1}/${batches.length} (${
+              batch.length
+            } stickers)...`
+          );
+
+          const batchHtml = <Stickers data={batch} />;
+          const page = await browser.newPage();
+
+          await page.setJavaScriptEnabled(false);
+          await page.setContent(batchHtml.toString(), {
+            timeout: 120000, // 2 minutes per batch
+            waitUntil: "domcontentloaded",
+          });
+
+          const pdfBuffer = await page.pdf({
+            width: "1.57in",
+            height: "1.18in",
+            timeout: 120000,
+          });
+
+          pdfBuffers.push(pdfBuffer);
+          await page.close();
+
+          // Log progress
+          console.log(
+            `Batch ${i + 1}/${batches.length} complete (${(
+              ((i + 1) / batches.length) *
+              100
+            ).toFixed(1)}%)`
+          );
+        }
+
+        console.log("All batches rendered, merging PDFs...");
+
+        // Merge all PDF buffers into one
+        const mergedPdf = await PDFDocument.create();
+        for (let i = 0; i < pdfBuffers.length; i++) {
+          const pdfDoc = await PDFDocument.load(pdfBuffers[i]);
+          const copiedPages = await mergedPdf.copyPages(
+            pdfDoc,
+            pdfDoc.getPageIndices()
+          );
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+          console.log(`Merged batch ${i + 1}/${pdfBuffers.length}`);
+        }
+
+        const finalPdfBuffer = await mergedPdf.save();
+        console.log("PDF merge complete");
+
+        // Check file size (Telegram limit is 50MB)
+        const fileSizeInMB = finalPdfBuffer.length / (1024 * 1024);
+        console.log(`Final stickers PDF size: ${fileSizeInMB.toFixed(2)} MB`);
+
+        if (fileSizeInMB > 50) {
+          console.error(
+            `⚠️  PDF size (${fileSizeInMB.toFixed(
+              2
+            )} MB) exceeds Telegram's 50MB limit!`
+          );
+          throw new Error(
+            `PDF size (${fileSizeInMB.toFixed(
+              2
+            )} MB) exceeds Telegram's 50MB limit. Please reduce the number of orders.`
+          );
+        } else if (fileSizeInMB > 45) {
+          console.warn(
+            `⚠️  PDF size (${fileSizeInMB.toFixed(
+              2
+            )} MB) is close to Telegram's 50MB limit!`
+          );
+        }
+
+        return Buffer.from(finalPdfBuffer);
+      } catch (error) {
+        console.error("error", error);
+        throw new Error("Failed to create stickers PDF");
+      } finally {
+        await shutdown();
+      }
+    } else {
+      // Simple single-render approach for smaller sticker counts
+      console.log(
+        `Sticker count (${stickers.length}) is under threshold, using single render...`
+      );
+
+      const stickersHtml = <Stickers data={stickers} />;
+
+      try {
+        const browser = await getBrowserInstance(); // Use standard browser config
+        const page = await browser.newPage();
+
+        await page.setJavaScriptEnabled(false);
+        await page.setContent(stickersHtml.toString(), {
+          timeout: 300000, // 5 minutes for single render
+          waitUntil: "domcontentloaded",
+        });
+
+        console.log("Setting content finished");
+        const pdfBuffer = await page.pdf({
+          width: "1.57in",
+          height: "1.18in",
+          timeout: 300000,
+        });
+
+        console.log("PDF created");
+
+        // Check file size (Telegram limit is 50MB)
+        const fileSizeInMB = pdfBuffer.length / (1024 * 1024);
+        console.log(`Stickers PDF size: ${fileSizeInMB.toFixed(2)} MB`);
+
+        if (fileSizeInMB > 50) {
+          console.error(
+            `⚠️  PDF size (${fileSizeInMB.toFixed(
+              2
+            )} MB) exceeds Telegram's 50MB limit!`
+          );
+          throw new Error(
+            `PDF size (${fileSizeInMB.toFixed(
+              2
+            )} MB) exceeds Telegram's 50MB limit. Please reduce the number of orders.`
+          );
+        } else if (fileSizeInMB > 45) {
+          console.warn(
+            `⚠️  PDF size (${fileSizeInMB.toFixed(
+              2
+            )} MB) is close to Telegram's 50MB limit!`
+          );
+        }
+
+        await page.close();
+
+        return pdfBuffer;
+      } catch (error) {
+        console.error("error", error);
+        throw new Error("Failed to create stickers PDF");
+      } finally {
+        await shutdown();
+      }
     }
-    // return stickersHtml;
   }
 };
 
