@@ -82,6 +82,10 @@ export async function get_single_supply_pdf(bot: Telegraf<MyContext<Update>>) {
         );
       });
 
+    // Give the server time to release resources before generating the next PDF
+    console.log("Waiting 5 seconds before generating stickers PDF...");
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
     await ctx.reply(`Генерируем лист со стикерами ...`).then((ctx) => {
       messageId2 = ctx.message_id;
     });

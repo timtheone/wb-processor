@@ -16,6 +16,14 @@ import { performDbSync } from "./utils/performDbSync";
 let browserInstance = null;
 
 async function getBrowserInstance(useAggressiveMemoryOptimization = false) {
+  // Always close existing instance for large PDF operations to free memory
+  if (browserInstance !== null && useAggressiveMemoryOptimization) {
+    console.log(
+      "Closing existing browser instance for memory-intensive operation..."
+    );
+    await closeBrowserInstance();
+  }
+
   if (browserInstance === null || !(await isBrowserOpen(browserInstance))) {
     const baseArgs = [
       "--no-sandbox",
@@ -75,6 +83,12 @@ async function closeBrowserInstance() {
 async function shutdown() {
   console.log("Shutting down browser instance");
   await closeBrowserInstance();
+
+  // Force garbage collection hint for large PDF operations
+  if (global.gc) {
+    console.log("Running garbage collection...");
+    global.gc();
+  }
 }
 
 const app = new Hono();
@@ -1016,8 +1030,22 @@ app.post(
       file: "orderList",
     });
 
-    return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
-    // return c.html(fileBuffer);
+    console.log(
+      `Sending order list PDF response (${(
+        fileBuffer.length /
+        1024 /
+        1024
+      ).toFixed(2)} MB)...`
+    );
+
+    // Return response with explicit content-length header
+    return new Response(fileBuffer, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Length": fileBuffer.length.toString(),
+      },
+    });
   }
 );
 
@@ -1041,12 +1069,22 @@ app.post(
       file: "stickers",
     });
 
-    console.log("Sending stickers PDF response...");
-    const response = c.body(fileBuffer, 200, {
-      "Content-Type": "application/pdf",
+    console.log(
+      `Sending stickers PDF response (${(
+        fileBuffer.length /
+        1024 /
+        1024
+      ).toFixed(2)} MB)...`
+    );
+
+    // Return response with explicit content-length header
+    return new Response(fileBuffer, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Length": fileBuffer.length.toString(),
+      },
     });
-    console.log("Stickers PDF response sent");
-    return response;
   }
 );
 
