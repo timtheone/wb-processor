@@ -896,8 +896,11 @@ const createOrderListForShopsCombinedPdf = async ({
           console.log(`Merged batch ${i + 1}/${pdfBuffers.length}`);
         }
 
-        const finalPdfBuffer = await mergedPdf.save();
+        const finalPdfBytes = await mergedPdf.save();
         console.log("PDF merge complete");
+
+        // Convert Uint8Array to Buffer
+        const finalPdfBuffer = Buffer.from(finalPdfBytes);
 
         // Check file size (Telegram limit is 50MB)
         const fileSizeInMB = finalPdfBuffer.length / (1024 * 1024);
@@ -922,7 +925,7 @@ const createOrderListForShopsCombinedPdf = async ({
           );
         }
 
-        return Buffer.from(finalPdfBuffer);
+        return finalPdfBuffer;
       } catch (error) {
         console.error("error", error);
         throw new Error("Failed to create stickers PDF");
@@ -1038,8 +1041,12 @@ app.post(
       file: "stickers",
     });
 
-    return c.body(fileBuffer, 200, { "Content-Type": "application/pdf" });
-    // return c.html(fileBuffer);
+    console.log("Sending stickers PDF response...");
+    const response = c.body(fileBuffer, 200, {
+      "Content-Type": "application/pdf",
+    });
+    console.log("Stickers PDF response sent");
+    return response;
   }
 );
 
